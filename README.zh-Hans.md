@@ -1,3 +1,5 @@
+> This is inherited Switch 1 Studio documentation. For NX2 status and commands, see [NX2 Port Studio](README.md).
+
 <p align="center"><img src="docs/images/hero.zh-Hans.svg" alt="NX Port Studio — 将你的Switch游戏库制作成Apple原生应用" width="100%"></p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <a href="README.ja.md">日本語</a> · <strong>简体中文</strong></p>
@@ -39,7 +41,7 @@
 
 LAN 需要相同的游戏版本和同一局域网，局域网本身不必连接互联网。LDN 的 IP 桥接需要主机端的兼容模块，与游戏自带的 LAN 模式是不同的机制。
 
-截至 2026 年 10 月 28 日，Nextendo 游戏服务仍受到证书问题和 Mario Kart 版本要求的阻碍。现有构建为 3.0.5，签名目录要求 4.0.1。账户登录并不能自动满足这些要求。[英文说明](README.md#current-game-service-blockers)列出了具体限制。
+截至 2026 年 10 月 28 日，Nextendo 游戏服务仍受到证书问题和 Mario Kart 版本要求的阻碍。现有构建为 3.0.5，签名目录要求 4.0.1。账户登录并不能自动满足这些要求。[英文说明](README.switch1.md#current-game-service-blockers)列出了具体限制。
 
 ## 开始使用
 

@@ -1,54 +1,49 @@
-# Roadmap
+# NX2 Port Studio roadmap
 
-Priorities follow reproducible results. This roadmap describes intended work, not promised release dates or universal compatibility.
+Milestones require reproducible evidence for the exact game build and platform.
 
-## 1. Stabilize the Apple baseline
+## 1. Decrypted input and development workspace
 
-- Make Studio setup, resource import, cancellation and signed IPA export reliable on a clean Mac.
-- Validate each game/update profile independently and retain exact build/version notes.
-- Finish current iPhone integration and verify launch, rendering, controls, saving and installation on physical devices.
-- Improve actionable diagnostics and recovery while preserving existing user data and exports.
-- Retain the five implemented interface languages and matching documentation captures; verify new screens in every language.
-- Review packaging, dependency notices, signing and notarization before a public binary release.
+Implemented: independent repository, key-free extracted input, Switch 2 metadata
+and NSO validation, private build plans, separate macOS interface and a native
+Ampere instruction lowering tool. Tests use synthetic inputs; the real dump
+and full shader semantics are not yet verified.
 
-**Exit evidence:** repeatable build/install flows and documented gameplay for the exact supported configurations.
+## 2. Mario Kart World native boot on Mac
 
-## 2. Expand verified local multiplayer
+Await the completed user dump. Inspect exact module build IDs and imports,
+measure CPU instruction use, then adapt the native rewriter and required
+Horizon/SDK services. Do not fabricate memory values or fixed addresses.
 
-- Retain Mario Kart 8 Deluxe 3.0.5 Mac ↔ Switch LAN as the current completed-race baseline.
-- Validate physical LDN join/create with a compatible Switch after the local play-history correction; the corrected Mac build reaches its host lobby, while a completed physical session remains pending.
-- Extend the user-confirmed iPhone ↔ Switch LAN lobby entry in both host roles to completed races. Isolate discovery/receive behavior and profile restrictions, including use of the optional Studio relay.
-- Exercise disconnect/reconnect, multiple participants, room changes and longer sessions.
-- Expand controller motion/vibration coverage according to actual platform/device capabilities.
+Exit evidence: rewritten ARM64 modules reach game initialization on Apple Silicon.
 
-**Exit evidence:** physical peer tests and completed sessions, separate from protocol/unit test results.
+## 3. First correct frame
 
-## 3. Validate Nextendo game traffic
+Implement NVN2 API interception, shader containers/reflection, Ampere translation
+into Metal, object/layout bindings, sparse memory and fence semantics. Implement
+task/mesh geometry instead of dropping draws.
 
-Own-application OAuth → identity-checked NEX credential acquisition and Keychain roundtrip have been verified. The following game-traffic milestones remain separate.
+Exit evidence: a correct title/menu frame compared with the user's console.
 
-- Keep own-application OAuth and signed-catalog support distinct from game authentication.
-- Complete and test the native identity, DNS, TLS and game-service paths required by specific titles.
-- Resolve the current native TLS certificate validity/hostname blockers with valid service certificates, retaining verification.
-- Obtain and validate an eligible Mario Kart game build: the available LAN-tested 3.0.5 build does not meet the current signed 4.0.1 service requirement.
-- Establish an actual authorized NEX game session and complete an online match on a supported game/version.
-- Add per-title network status with evidence, failures and reproducible versions.
-- Physically validate the implemented mobile account flow: system-browser authorization, identity-checked NEX acquisition, per-app Keychain storage and migration from the earlier private credential cache.
+## 4. Mac races and persistence
 
-**Exit evidence:** a documented native online match. Server policy acceptance and an OAuth token alone do not meet this milestone.
+Validate actual races, controls, audio/video, saves, scene transitions and longer
+sessions. Investigate the incorrect instruction/service/memory operation rather
+than hiding it with an empty-success stub.
 
-## 4. Research additional platforms
+Exit evidence: a completed local race and restart with a preserved save on Mac.
 
-After the Apple baseline is stable, explore **Android and Windows across ARM and x86 architecture families**. No builds for these targets are currently offered.
+## 5. iPhone/iPad
 
-| Target | Work to establish feasibility |
-| --- | --- |
-| Android / ARM | Host services, mobile lifecycle/input, packaging and a suitable graphics backend. |
-| Windows / ARM | Host ABI and synchronization, device/input integration, packaging and a suitable graphics backend. |
-| Android or Windows / x86 | CPU translation or recompilation in addition to the platform/graphics work. ARM game code cannot execute directly on an x86 CPU. |
+Measure resident/GPU memory against the selected device budget. Integrate the
+working NX2 runtime with inherited packaging and Xcode signing. Verify provisioning,
+installation, boot and gameplay separately.
 
-Exact CPU generations, 32/64-bit targets and device requirements will be decided from working prototypes. These are research directions, not compatibility promises.
+Exit evidence: a signed, verified IPA completing a race on a physical device.
+No iOS compatibility is established by the input tools.
 
-## How progress is recorded
+## 6. Additional titles and network play
 
-An implemented feature, a passing isolated test, physical interoperability and completed gameplay are separate milestones. Issues and release notes should say which one was reached and link to the corresponding evidence.
+Add titles based on measured differences with exact-build gates. LAN, LDN and
+online services need their own implementation and physical validation. Inherited
+Switch 1 network results do not establish Switch 2 interoperability.

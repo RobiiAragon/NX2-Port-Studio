@@ -1,3 +1,5 @@
+> This is inherited Switch 1 Studio documentation. For NX2 status and commands, see [NX2 Port Studio](README.md).
+
 <p align="center">
   <img src="docs/images/hero.es.svg" alt="NX Port Studio — Tus juegos de Switch, en apps nativas para Apple" width="100%">
 </p>

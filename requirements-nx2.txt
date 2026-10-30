@@ -1,0 +1,2 @@
+# Only needed when NSO segments use LZ4 compression. No decryption dependency.
+lz4==4.4.5

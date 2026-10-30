@@ -1,3 +1,5 @@
+> This is inherited Switch 1 Studio documentation. For NX2 status and commands, see [NX2 Port Studio](README.md).
+
 <p align="center"><img src="docs/images/hero.fr.svg" alt="NX Port Studio — Vos jeux Switch, en apps Apple natives" width="100%"></p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.es.md">Español</a> · <strong>Français</strong> · <a href="README.ja.md">日本語</a> · <a href="README.zh-Hans.md">简体中文</a></p>
@@ -39,7 +41,7 @@ Le projet étend aussi le moteur : sockets Horizon, attentes HLE, vérification 
 
 Pour le LAN, utilisez la même version du jeu et le même réseau local. Ce réseau peut fonctionner sans accès Internet. Le pont LDN sur IP exige un module compatible sur la console ; le mode LAN d'un jeu suit son propre protocole.
 
-Au 28 octobre 2026, les essais Nextendo restent bloqués par des certificats de services et par la version disponible de Mario Kart : 3.0.5, alors que le catalogue signé demande 4.0.1. La connexion au compte ne résout pas ces exigences. Consultez le [README principal](README.md#current-game-service-blockers) pour les détails.
+Au 28 octobre 2026, les essais Nextendo restent bloqués par des certificats de services et par la version disponible de Mario Kart : 3.0.5, alors que le catalogue signé demande 4.0.1. La connexion au compte ne résout pas ces exigences. Consultez le [README principal](README.switch1.md#current-game-service-blockers) pour les détails.
 
 ## Démarrage
 

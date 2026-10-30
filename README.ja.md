@@ -1,3 +1,5 @@
+> This is inherited Switch 1 Studio documentation. For NX2 status and commands, see [NX2 Port Studio](README.md).
+
 <p align="center"><img src="docs/images/hero.ja.svg" alt="NX Port Studio — SwitchのゲームをAppleのネイティブアプリへ" width="100%"></p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <strong>日本語</strong> · <a href="README.zh-Hans.md">简体中文</a></p>
@@ -39,7 +41,7 @@
 
 LANではゲームのバージョンを揃え、同じローカルネットワークに接続してください。ネットワーク自体にインターネット接続は必須ではありません。LDNのIPブリッジには本体側の対応モジュールが必要で、ゲームに搭載されたLANモードとは別の仕組みです。
 
-2026年10月28日時点では、Nextendoのゲーム用サービスの証明書と、手元のMario Kartのバージョンが障害になっています。手元のビルドは3.0.5ですが、署名付きカタログでは4.0.1が要求されています。アカウント連携だけでは解消しません。[詳細は英語版](README.md#current-game-service-blockers)を参照してください。
+2026年10月28日時点では、Nextendoのゲーム用サービスの証明書と、手元のMario Kartのバージョンが障害になっています。手元のビルドは3.0.5ですが、署名付きカタログでは4.0.1が要求されています。アカウント連携だけでは解消しません。[詳細は英語版](README.switch1.md#current-game-service-blockers)を参照してください。
 
 ## はじめに
 

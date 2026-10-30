@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "name": "NX Port Studio",
+      "url": "https://github.com/RobiiAragon/NX-Port-Studio.git",
+      "commit": "c5343a294946906beaf31d080b1106b9d2d216f8",
+      "role": "inherited native engine, desktop build and signing code"
+    },
+    {
+      "name": "nxnative",
+      "url": "https://github.com/seedds/nxnative.git",
+      "commit": "6b0cffbb5e5c5f1b9e78937b2287f3a2273e1aae",
+      "role": "reference snapshot; not wholesale merged over Studio customizations"
+    },
+    {
+      "name": "Eden NX2",
+      "url": "https://git.eden-emu.dev/Takoroka/eden-nx2.git",
+      "branch": "eden-nx2",
+      "commit": "50fa86bbbc403ad565eb44fcc281f16f77c69e15",
+      "role": "protocol reference and vendored Ampere lowering",
+      "files": [
+        {
+          "file": "third_party/eden-nx2/lower_to_maxwell.h",
+          "upstream_path": "src/shader_recompiler/frontend/ampere/lower_to_maxwell.h",
+          "sha256": "aee37d225384d7e98d856dfecc4c608de29386ac4d551ea95da5fff4a37cdc76"
+        }
+      ]
+    }
+  ]
+}

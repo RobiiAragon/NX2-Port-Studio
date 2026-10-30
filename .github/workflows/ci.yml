@@ -14,6 +14,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  nx2:
+    name: NX2 inputs and Ampere / ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-nx2.txt
+      - run: make -C native
+      - name: Synthetic Switch 2 inputs and offline shader cases
+        run: python -m unittest discover -s nx2/tests -v
   studio:
     name: Studio / macOS
     runs-on: macos-latest
@@ -27,7 +45,11 @@ jobs:
       - name: PortCore tests
         run: swift test --package-path macOS/NXPortStudio
       - name: Studio build
-        run: swift build --package-path macOS/NXPortStudio
+        run: swift build --package-path macOS/NXPortStudio --product NX2PortStudio
+      - name: Package independent NX2 app
+        run: bash scripts/package_nx2_studio.sh "${{ runner.temp }}/NX2 Port Studio.app"
+      - name: Verify signed bundle after synthetic import
+        run: python3 scripts/check_nx2_bundle.py "${{ runner.temp }}/NX2 Port Studio.app"
   tools:
     name: Asset-free Python checks
     runs-on: macos-latest

@@ -14,3 +14,24 @@ tools/dev-private/
 
 # Imported firmware signing material belongs only in private user resources.
 *.keyring
+
+# NX2 workspaces, private dumps, generated tools and Apple builds
+.nx2-build/
+*.keys
+*.nsp
+*.xci
+*.nsz
+*.xcz
+*.romfs
+*.ipa
+*.app/
+*.xcarchive/
+**/.build/
+**/.swiftpm/
+**/exefs/
+**/ExeFS/
+**/romfs/
+**/RomFS/
+**/main.npdm
+**/inspection.json
+**/build-plan.json

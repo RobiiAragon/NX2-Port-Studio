@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "name": "Mario Kart World",
+  "program_id": "0400C3F00006E000",
+  "platform": "switch2",
+  "architecture": "arm64",
+  "status": "awaiting-user-dump",
+  "verified_build_ids": [],
+  "mac_gameplay_verified": false,
+  "ios_gameplay_verified": false,
+  "runtime_profile_generated": false
+}

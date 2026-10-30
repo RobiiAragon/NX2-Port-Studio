@@ -1,6 +1,12 @@
 # Credits and provenance
 
-NX Port Studio is an independent project built on [nxnative by seedds](https://github.com/seedds/nxnative). It is not presented as the original author of that engine. The original MIT license and `Copyright (c) 2026 seedds` notice are preserved in [LICENSE](LICENSE).
+NX2 Port Studio derives from Robii Aragon’s NX Port Studio and is built on [nxnative by seedds](https://github.com/seedds/nxnative). It is not presented as the original author of that engine. The original MIT license and `Copyright (c) 2026 seedds` notice are preserved in [LICENSE.nxnative](LICENSE.nxnative).
+
+## NX2 additions
+
+Takoroka / Eden NX2 provides the GPL-3.0-or-later Ampere lowerer and public protocol reference. Its imported source is unmodified, attributed and pinned in [upstreams.lock.json](upstreams.lock.json), with its license under [third_party/eden-nx2](third_party/eden-nx2/README.md). New NX2 code and the derivative are GPL-3.0-or-later; inherited MIT source keeps its original notices. The root [LICENSE](LICENSE) covers the GPL additions and combined derivative.
+
+The images below belong to inherited Switch 1 Studio documentation; they do not demonstrate NX2 gameplay.
 
 ## The foundation
 
