@@ -1,2 +1,8 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Preserve audited upstream license and notice bytes.
+dm/third_party/notices/** -text
+
 # Preserve byte-for-byte upstream snapshots, including their original whitespace.
-third_party/zbic-zstd/* -whitespace
+third_party/zbic-zstd/* -text -whitespace
