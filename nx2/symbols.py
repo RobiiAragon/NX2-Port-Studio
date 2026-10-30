@@ -8,6 +8,23 @@ MAX_SYMBOLS = 100_000
 MAX_STRING_TABLE = 32 * 1024 * 1024
 
 
+def inspect_linkage(modules):
+    """Compare declared names only; missing tables are not proof of resolution."""
+    available = [m for m in modules if (m.get("symbols") or {}).get("status") == "read"]
+    missing = [m["name"] for m in modules if (m.get("symbols") or {}).get("status") != "read"]
+    exports = {name for m in available for name in m["symbols"]["exports"]}
+    results = []
+    for module in available:
+        symbols = module["symbols"]
+        absent = set(symbols["imports"]) - exports
+        weak = set(symbols["weak_imports"])
+        results.append({"module": module["name"], "required_names_not_found": sorted(absent - weak),
+                        "weak_names_not_found": sorted(absent & weak)})
+    return {"status": "incomplete-tables" if missing else "names-checked", "uninspected_modules": missing,
+            "modules": results, "abi_verified": False,
+            "scope": "Declared dynamic symbol names across these modules only; no relocations, versions, visibility, calling conventions or runtime behavior verified."}
+
+
 def read_symbols(symbols, strings):
     if len(symbols) % 24 or len(symbols) // 24 > MAX_SYMBOLS or len(strings) > MAX_STRING_TABLE:
         raise DumpError("NSO dynamic symbol tables exceed the supported bounds", code="invalid-symbols")

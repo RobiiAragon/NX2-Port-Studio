@@ -2,8 +2,9 @@
 
 ## Scope
 
-NX2 Port Studio targets already decrypted, extracted Switch 2 titles, starting
-with Mario Kart World (`0400C3F00006E000`). The input is the game's own ARM64
+NX2 Port Studio targets already decrypted, extracted Switch 2 titles. Initial
+local diagnostics use Donkey Kong Bananza; Mario Kart World (`0400C3F00006E000`)
+remains a planned target. The input is the game's own ARM64
 binary modules and resources, not decompiled C/C++ source. This input stage
 does not accept encrypted NSP/XCI packages, request keys, or boot firmware.
 Game execution may still need particular system resources; that has not been
@@ -47,6 +48,15 @@ part of this candidate import. A prepared build plan can reference the library;
 No executable is returned, and both the CLI JSON and desktop screen state that
 runtime support is pending. The legacy `build_ipa_from_nsp.py` remains inherited
 Switch 1 code and is not used as an NX2 exporter.
+
+## First real CPU diagnostic
+
+[Bananza's base and update](DONKEY_KONG_BANANZA.md) passed module inspection and
+offline rewriting. A private headless copy of the inherited host reached
+`nnMain` after correcting `GetInfo` ProcessPageSize, then exited deliberately
+at the first graphics lookup. This demonstrates that CPU startup path; inherited
+initialization order, service takeovers and memory accounting still require
+Switch 2 validation. The diagnostic host is not shipped by the desktop app.
 
 ## Native runtime path to implement
 

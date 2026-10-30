@@ -32,6 +32,9 @@ jobs:
       - run: make -C native
       - name: Synthetic Switch 2 inputs and offline shader cases
         run: python -m unittest discover -s nx2/tests -v
+      - name: Guest page size and memory mapping regressions
+        if: runner.os == 'macOS'
+        run: make -C dm/host/tests memory memory-profile
   studio:
     name: Studio / macOS
     runs-on: macos-latest

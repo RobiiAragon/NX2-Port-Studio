@@ -14,13 +14,14 @@ from .romfs import inspect_image
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MKW_ID = "0400C3F00006E000"
+TITLE_NAMES = {MKW_ID: "Mario Kart World", "040074A01BF12000": "Donkey Kong Bananza"}
 BLOCKERS = [
     {"id": "native-cpu", "detail": "Validate Switch 2 ARM64 rewriting, PAC and ABI on Apple hardware."},
     {"id": "horizon-nx2", "detail": "Implement the SDK, service and memory differences used by the selected build."},
     {"id": "nvn2-metal", "detail": "Implement and validate NVN2 API interception on Metal."},
     {"id": "ampere-shaders", "detail": "Integrate the standalone Ampere lowerer with shader extraction, reflection and Metal translation."},
-    {"id": "mesh-task", "detail": "Implement task/mesh geometry and validate it with Mario Kart World."},
-    {"id": "gameplay", "detail": "Verify boot, rendering, races, audio, saves and memory on Mac; then on iPhone."},
+    {"id": "mesh-task", "detail": "Implement the task/mesh geometry used by the selected title."},
+    {"id": "gameplay", "detail": "Verify boot, rendering, gameplay, audio, saves and memory on Mac; then on iPhone."},
 ]
 
 
@@ -83,11 +84,13 @@ def inspect_dump(input_path: Path, *, census: bool = False, symbols: bool = Fals
         if MODULE_NAME.fullmatch(path.name):
             local_file(path, root)
             modules.append(read_nso(path, census=census, symbols=symbols))
+    from .symbols import inspect_linkage
     return {"schema_version": 1, "tool_version": __version__, "stage": "validated-input",
             "input": {"root": str(root), "exefs": str(exefs), "romfs": str(romfs), "romfs_kind": romfs_kind},
             "metadata": metadata, "modules": modules,
+            "linkage": inspect_linkage(modules) if symbols else None,
             "romfs_layout": romfs_layout,
-            "target": {"name": "Mario Kart World" if metadata["program_id"] == MKW_ID else "Unregistered Switch 2 title",
+            "target": {"name": TITLE_NAMES.get(metadata["program_id"], "Unregistered Switch 2 title"),
                        "initial_target": metadata["program_id"] == MKW_ID, "gameplay_verified": False},
             "requires_keys": False, "requires_firmware_for_inspection": False,
             "validation_scope": "NSO bounds, decompression, declared segment hashes and complete module SHA-256; NPDM layout and SHA-256; RomFS table ranges/root. No full RomFS payload integrity or signature verification.",

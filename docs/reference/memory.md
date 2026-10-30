@@ -13,6 +13,14 @@ The guest address space, heaps, pools, virtual address memory and the allocators
 - **Check:** measure before sizing (`DM_SVC=1`: the `SetHeapSize` request and the highest `MapPhysicalMemory` address).
 - **Note:** on iOS without the extended-virtual-addressing entitlement a single 6 GB reservation succeeds and 7 GB fails, but Metal and the rest of the process need address space too; 5 GB is the total proven on a phone (D2R).
 
+### Guest page-size query during RELRO initialization
+
+- **Symptom:** a Switch 2 module aborts in `nn::ro::ProtectRelro` during its `DT_INIT`, before `nnMain`, although its module boundaries are aligned.
+- **Cause:** `GetInfo` type 33 (`ProcessPageSize`) fell through to success with zero. The SDK checks addresses and sizes against `page_size - 1`; zero produces an all-ones mask and rejects a nonzero range.
+- **Fix:** report the guest memory model's 4 KiB page size in `hle_svc.c`. Do not report Apple's native page size: the guest loader and mapping operations use 4 KiB boundaries, with native protections rounded separately. The memory dispatcher fixture verifies a guest boundary one page into a host page, including the 16 KiB-host sanitizer configuration.
+- **Found on:** [Donkey Kong Bananza](../nx2/DONKEY_KONG_BANANZA.md), base and update CPU diagnostics. Both reached `nnMain` after this fix; rendering remains unimplemented.
+- **Check:** [public InfoType definitions](https://switchbrew.org/wiki/SVC#InfoType); the SDK's actual query and alignment check. Raw module offsets and logs remain private.
+
 ## Heap and application pool
 
 ### Heap sized from the application pool less used memory

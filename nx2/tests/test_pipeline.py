@@ -41,6 +41,13 @@ class DumpTests(unittest.TestCase):
         with self.assertRaisesRegex(DumpError, "not a 64-bit Switch 2"):
             inspect_dump(self.root)
 
+    def test_bananza_identity_does_not_claim_runtime_compatibility(self):
+        (self.root / "exefs/main.npdm").write_bytes(npdm(program_id=0x040074A01BF12000))
+        report = inspect_dump(self.root)
+        self.assertEqual(report["target"]["name"], "Donkey Kong Bananza")
+        self.assertFalse(report["target"]["gameplay_verified"])
+        self.assertFalse(report["runtime_ready"])
+
     def test_missing_module_and_empty_romfs(self):
         sdk = self.root / "exefs/sdk"
         content = sdk.read_bytes()

@@ -458,6 +458,9 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < 8; ++i) assert(!pthread_create(&threads[i], NULL, init_worker, &addresses[i]));
     for (unsigned i = 0; i < 8; ++i) { assert(!pthread_join(threads[i], NULL)); assert(addresses[i] == addresses[0]); }
     alias = addresses[0]; stack = info(I_StackAddr); heap = info(I_HeapAddr);
+    // SDK RELRO code must accept guest 4 KiB boundaries even on a 16 KiB host.
+    uint64_t guest_page = info(33);
+    assert(guest_page == P && !((alias + P) & (guest_page - 1)));
     lazy_commit(); alias_lifecycle(); ownership(); module_sources(); failures(); concurrency(); fragmented_queries();
     guest_helper();
     if (!DM_GAME_MEM_MAP_LIMIT) metadata_limit();

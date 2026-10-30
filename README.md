@@ -1,6 +1,7 @@
 # NX2 Port Studio
 
-Experimental native Switch 2 bring-up for Apple Silicon, starting with **Mario Kart World**.
+Experimental native Switch 2 bring-up for Apple Silicon. The first local
+diagnostics use **Donkey Kong Bananza**; **Mario Kart World** remains a planned target.
 Built from [NX Port Studio](https://github.com/RobiiAragon/NX-Port-Studio), with
 [nxnative](https://github.com/seedds/nxnative) as the native execution foundation
 and [Eden NX2](https://git.eden-emu.dev/Takoroka/eden-nx2/src/branch/eden-nx2)
@@ -8,8 +9,11 @@ as an additional protocol and Ampere shader reference.
 
 **Current milestone: decrypted input validation, private bring-up workspaces,
 a native macOS front end and a standalone Ampere lowering tool.**
-This version does **not yet run Mario Kart World or export playable Mac/iPhone games**.
-The user's first real dump is still pending; tests use original synthetic data.
+This version does **not yet render Switch 2 games or export playable Mac/iPhone games**.
+Donkey Kong Bananza's base and one update passed input checks and a private,
+headless inherited-host CPU probe reached `nnMain`, then stopped deliberately
+before graphics. The desktop app remains the input stage. See the
+[Bananza diagnostic status](docs/nx2/DONKEY_KONG_BANANZA.md) for the scope and limits.
 
 ## Input
 
@@ -57,7 +61,10 @@ a status note. It references the original game files without copying them.
 Choose a **new private output folder outside the repository and dump folder**.
 `--platform iOS` records the intended target; it does not generate or sign an IPA.
 `--json` emits a structured result, with nonzero exit status for an invalid input.
-`--symbols` adds declared dynamic imports/exports. Errors include stable codes
+`--symbols` adds declared dynamic imports/exports and compares their names across
+modules, separating required and weak names not found. This does not validate the
+ABI or relocation behavior; missing symbol tables are reported as incomplete.
+Errors include stable codes
 and recovery hints when available. `verify` rechecks the prepared executable
 bytes and optional resources; it does not hash every RomFS file payload.
 
@@ -107,10 +114,11 @@ is implied. See [architecture and integration gaps](docs/nx2/ARCHITECTURE.md).
 
 | Area | Evidence | Limit |
 | --- | --- | --- |
-| Decrypted input | Synthetic Switch 2 NPDM/NSO, LZ4/ZBIC, declared SHA-256 and fingerprints | Real dump not supplied |
+| Decrypted input | Synthetic structures plus Bananza base/update, eighteen verified NSO segments | No complete RomFS payload hashes or signature verification |
 | Invalid input | Truncation, missing modules, empty RomFS, corrupt hashes, invalid ranges, symlinks | Not full RomFS/signature verification |
 | Workspace | Private output, preserved inputs, recorded builds/platform, refused overwrite | No game executable |
-| Ampere tool | Native build; exact synthetic EXIT and explicit rejection cases | Not a complete Ampere-to-Metal chain |
+| CPU diagnostic | Bananza base/update reached `nnMain` in a private headless inherited host | Deliberate stop at graphics bootstrap; inherited service/memory assumptions |
+| Ampere tool | Synthetic cases plus two unique real Bananza primitive shaders | Intermediate words only; no Metal output or rendering validation |
 | macOS front end | Swift build and shared CLI integration | No Switch 2 game boot |
 | iPhone | Intended target recorded | No IPA, device boot or gameplay tested |
 
@@ -124,7 +132,8 @@ swift test --package-path macOS/NXPortStudio
 
 ## Next milestones
 
-See the [roadmap](ROADMAP.md), [Mario Kart World status](docs/nx2/MARIO_KART_WORLD.md)
+See the [roadmap](ROADMAP.md), [Bananza diagnostics](docs/nx2/DONKEY_KONG_BANANZA.md),
+[Mario Kart World status](docs/nx2/MARIO_KART_WORLD.md)
 and [architecture](docs/nx2/ARCHITECTURE.md). [Research notes](docs/nx2/RESEARCH.md)
 catalog 22 native/runtime/tooling repositories and relevant primary documentation.
 Sharing ARM64 makes native CPU

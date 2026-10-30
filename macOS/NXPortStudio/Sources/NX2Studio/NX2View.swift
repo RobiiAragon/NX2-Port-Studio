@@ -13,7 +13,7 @@ struct NX2View: View {
                 Divider()
                 Label(nx2t("Extracted game"), systemImage: "folder")
                 Spacer()
-                Text(nx2t("First target: Mario Kart World"))
+                Text(nx2t("Experimental Switch 2 tools"))
                     .font(.callout).foregroundStyle(.secondary)
                 Text(nx2t("Experimental development"))
                     .font(.caption).foregroundStyle(.secondary)

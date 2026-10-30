@@ -40,7 +40,7 @@ with open(sys.argv[1], 'wb') as target:
     plistlib.dump({
         'CFBundleName': 'NX2 Port Studio', 'CFBundleDisplayName': 'NX2 Port Studio',
         'CFBundleIdentifier': 'dev.robii.nx2portstudio', 'CFBundleExecutable': 'NX2PortStudio',
-        'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.2.0', 'CFBundleVersion': '2',
+        'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.2.1', 'CFBundleVersion': '3',
         'CFBundleDevelopmentRegion': 'es', 'CFBundleIconFile': 'AppIcon',
         'LSMinimumSystemVersion': '14.0', 'LSArchitecturePriority': ['arm64'],
         'LSApplicationCategoryType': 'public.app-category.developer-tools',

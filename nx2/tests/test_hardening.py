@@ -13,6 +13,7 @@ from nx2.formats import read_nso
 from nx2.input_io import stable_file
 from nx2.pipeline import REPOSITORY, inspect_dump, prepare, verify_workspace
 from nx2.romfs import inspect_image
+from nx2.symbols import inspect_linkage
 from nx2.tests.fixtures import dump, nso, romfs_image
 
 
@@ -24,6 +25,23 @@ class HardeningTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_linkage_distinguishes_missing_required_and_weak_names(self):
+        modules = [
+            {"name": "main", "symbols": {"status": "read", "imports": ["provided", "required", "optional"],
+                                         "exports": [], "weak_imports": ["optional"]}},
+            {"name": "sdk", "symbols": {"status": "read", "imports": [],
+                                        "exports": ["provided"], "weak_imports": []}},
+        ]
+        result = inspect_linkage(modules)
+        self.assertEqual(result["status"], "names-checked")
+        self.assertEqual(result["modules"][0]["required_names_not_found"], ["required"])
+        self.assertEqual(result["modules"][0]["weak_names_not_found"], ["optional"])
+        self.assertFalse(result["abi_verified"])
+        modules[1]["symbols"] = {"status": "not-declared"}
+        result = inspect_linkage(modules)
+        self.assertEqual(result["status"], "incomplete-tables")
+        self.assertEqual(result["uninspected_modules"], ["sdk"])
 
     def test_uncompressed_size_field_is_not_authoritative(self):
         raw = nso()
