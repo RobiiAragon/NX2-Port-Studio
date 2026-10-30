@@ -25,7 +25,14 @@ struct NX2App: App {
 
 func nx2t(_ key: String) -> String {
     // The initial NX2 desktop release uses Spanish, independently of Studio 1's preferences.
-    guard let url = Bundle.module.url(forResource: "es", withExtension: "lproj"),
+    #if DEBUG
+    let resources = Bundle.module
+    #else
+    let resources = Bundle.main.resourceURL.flatMap {
+        Bundle(url: $0.appendingPathComponent("NXPortStudio_NX2Studio.bundle"))
+    } ?? Bundle.main
+    #endif
+    guard let url = resources.url(forResource: "es", withExtension: "lproj"),
           let bundle = Bundle(url: url) else { return key }
     return bundle.localizedString(forKey: key, value: key, table: nil)
 }

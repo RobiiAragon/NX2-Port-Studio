@@ -81,6 +81,23 @@ struct NX2View: View {
                         } header: { Text(nx2t("Bring-up workspace")) }
                     }
                     Section {
+                        Text(nx2t("Mii and font resources are optional candidates. Switch 2 compatibility remains unverified."))
+                            .foregroundStyle(.secondary)
+                        if let selected = model.resources {
+                            LabeledContent(nx2t("Source firmware"), value: "\(selected.source_platform) · \(selected.firmware_version)")
+                            LabeledContent(nx2t("Verified files"), value: String(selected.file_count))
+                        }
+                        if let url = model.resourcesURL {
+                            Text(url.path).font(.caption.monospaced()).textSelection(.enabled)
+                        }
+                        HStack {
+                            Button(nx2t("Choose resource library…")) { model.chooseResources() }
+                            if model.resourcesURL != nil {
+                                Button(nx2t("Remove selection")) { model.clearResources() }
+                            }
+                        }.disabled(model.isBusy)
+                    } header: { Text(nx2t("Optional system resources")) }
+                    Section {
                         Label(nx2t("Dump import and validation"), systemImage: "checkmark.circle")
                         Label(nx2t("Standalone Ampere translator · synthetic tests"), systemImage: "wrench.and.screwdriver")
                         Label(nx2t("Native game execution and NVN2 on Metal · pending"), systemImage: "clock")

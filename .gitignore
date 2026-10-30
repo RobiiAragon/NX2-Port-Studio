@@ -35,3 +35,5 @@ tools/dev-private/
 **/main.npdm
 **/inspection.json
 **/build-plan.json
+**/system_data/
+**/SystemResources/

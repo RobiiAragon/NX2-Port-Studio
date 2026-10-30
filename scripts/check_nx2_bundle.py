@@ -24,9 +24,12 @@ def main():
     args = parser.parse_args()
     app = args.bundle.resolve(strict=True)
     subprocess.run(["/usr/bin/codesign", "--verify", "--strict", str(app)], check=True)
+    binary = (app / "Contents/MacOS/NX2PortStudio").read_bytes()
+    if any(prefix in binary for prefix in (b"/Users/", b"/home/")):
+        raise SystemExit("Release executable contains a local development path")
     before = hashes(app)
     with tempfile.TemporaryDirectory(prefix="nx2-bundle-test-") as temporary:
-        source = dump(Path(temporary) / "Synthetic input")
+        source = dump(Path(temporary) / "Synthetic input", compressed="zbic")
         script = app / "Contents/Resources/nx2-engine/scripts/nx2.py"
         # Deliberately no -B or environment override: the entry point itself
         # must protect signed bundle resources from Python bytecode writes.

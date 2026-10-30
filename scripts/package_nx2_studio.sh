@@ -18,13 +18,18 @@ trap 'rm -rf "$STAGING"' EXIT
 APP="$STAGING/NX2 Port Studio.app"
 CONTENTS="$APP/Contents"
 ENGINE="$CONTENTS/Resources/nx2-engine"
-mkdir -p "$CONTENTS/MacOS" "$ENGINE/scripts"
+mkdir -p "$CONTENTS/MacOS" "$ENGINE/scripts" "$ENGINE/native" "$ENGINE/third_party/zbic-zstd"
 cp "$BIN_DIR/NX2PortStudio" "$CONTENTS/MacOS/"
+/usr/bin/strip -S "$CONTENTS/MacOS/NX2PortStudio"
 cp -R "$BIN_DIR/NXPortStudio_NX2Studio.bundle" "$CONTENTS/Resources/"
 ln -s ../Resources/NXPortStudio_NX2Studio.bundle "$CONTENTS/MacOS/NXPortStudio_NX2Studio.bundle"
 /usr/bin/rsync -a --exclude='__pycache__/' --exclude='*.pyc' --exclude='tests/' "$REPO_DIR/nx2" "$ENGINE/"
 cp "$REPO_DIR/scripts/nx2.py" "$ENGINE/scripts/"
 cp "$REPO_DIR/upstreams.lock.json" "$REPO_DIR/requirements-nx2.txt" "$REPO_DIR/LICENSE" "$REPO_DIR/LICENSE.nxnative" "$ENGINE/"
+make -C "$REPO_DIR/native"
+cp "$REPO_DIR/.nx2-build/native/libnx2_zbic.dylib" "$ENGINE/native/"
+cp "$REPO_DIR/third_party/zbic-zstd/LICENSE.BSD" "$REPO_DIR/third_party/zbic-zstd/COPYING.GPL2" "$REPO_DIR/third_party/zbic-zstd/README.md" "$ENGINE/third_party/zbic-zstd/"
+/usr/bin/codesign --force --sign - "$ENGINE/native/libnx2_zbic.dylib"
 # The app only contains the input stage. The Ampere development tool is built
 # separately and is not a game runtime or an iOS exporter.
 xcrun swift "$PACKAGE_DIR/scripts/GenerateIcon.swift" "$STAGING/AppIcon.iconset"
@@ -35,7 +40,7 @@ with open(sys.argv[1], 'wb') as target:
     plistlib.dump({
         'CFBundleName': 'NX2 Port Studio', 'CFBundleDisplayName': 'NX2 Port Studio',
         'CFBundleIdentifier': 'dev.robii.nx2portstudio', 'CFBundleExecutable': 'NX2PortStudio',
-        'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.1.0', 'CFBundleVersion': '1',
+        'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.2.0', 'CFBundleVersion': '2',
         'CFBundleDevelopmentRegion': 'es', 'CFBundleIconFile': 'AppIcon',
         'LSMinimumSystemVersion': '14.0', 'LSArchitecturePriority': ['arm64'],
         'LSApplicationCategoryType': 'public.app-category.developer-tools',

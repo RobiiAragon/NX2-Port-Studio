@@ -17,15 +17,32 @@ Studio's process runner, with process-group cancellation and no shell interpolat
 
 - NPDM: bounds-checked META/ACI0/ACID, 64-bit flag, Switch 2 ACID placement,
   program ID, services, core capability and SVC declarations.
-- NSO: header, segment ranges and overlaps, bounded LZ4 decompression and
-  SHA-256 when the NSO declares hashes. Build IDs are preserved in full.
-- RomFS: presence/nonempty directory or basic image header; content integrity
-  is not verified. Resources are neither copied nor uploaded.
+- NSO: header, page locations, segment bounds, LZ4 and bounded native ZBIC
+  decompression, declared segment hashes and complete file SHA-256. Optional
+  dynamic symbols are read from declared rodata tables; absent tables are not
+  presented as proof of zero imports. Uncompressed segments use their actual
+  size instead of trusting the compressed-size field.
+- RomFS: nonempty directory or image table ranges/overlaps and root entry;
+  file payload integrity is not verified. Game resources are not copied.
+- Inputs changing while being read are rejected; workspaces record fingerprints
+  and `verify` rechecks executable/NPDM content and optional resource hashes.
 - Optional CPU census: exact word-pattern counts in text. Embedded data may
   match instructions; this is not disassembly, CFG validation or ABI support.
 - Workspaces: output is private and outside the repository and dump folder.
   Existing paths, including symlinks, are refused. Inspection never writes to
-  input. A failed preparation removes its own staged output.
+  input. Directory permissions are owner-only, independent of umask. A failed
+  preparation removes its own staged output.
+
+## Optional system resources
+
+`nx2.resources` verifies an existing decrypted Studio catalog, then imports only
+the supported Mii and shared-font candidates into a separate private NX2 library.
+Its source platform, firmware version and per-file hashes are retained. The
+Switch 1 local resource review found six such archives containing thirteen files;
+their presence/integrity is verified, not compatibility with Mario Kart World.
+System executables, account data, certificates and local-play keyrings are not
+part of this candidate import. A prepared build plan can reference the library;
+`runtime_enabled` remains false until the matching SDK use is implemented/tested.
 
 No executable is returned, and both the CLI JSON and desktop screen state that
 runtime support is pending. The legacy `build_ipa_from_nsp.py` remains inherited
@@ -73,3 +90,6 @@ for the entire instruction set, or image correctness.
 the separately cloned nxnative reference revision, and Eden's branch/commit
 plus the SHA-256 of the one imported source file. nxnative main has not been
 wholesale merged over Studio's custom changes. Original license notices remain.
+The bounded ZBIC helper additionally pins the dual-licensed Zstandard C sources
+and uses their BSD option. [Research notes](RESEARCH.md) and the revision catalog
+separate implemented imports from references reserved for future integration.

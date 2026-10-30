@@ -26,6 +26,29 @@
           "sha256": "aee37d225384d7e98d856dfecc4c608de29386ac4d551ea95da5fff4a37cdc76"
         }
       ]
+    },
+    {
+      "name": "ZBIC-enabled Zstandard amalgamation",
+      "url": "https://github.com/kinnay/zbic.git",
+      "commit": "11b08f2712264bbed731545085cbd9702096ceb7",
+      "role": "bounded native ZBIC decoder; only dual-licensed Zstandard C files, using their BSD option; Python extension not imported",
+      "files": [
+        {
+          "file": "third_party/zbic-zstd/zstd.c",
+          "upstream_path": "src/zstd.c",
+          "sha256": "6f8e89a93f760ab2e9e48f8bbac766e254aa748a343e495eaa896ac441772e1f"
+        },
+        {
+          "file": "third_party/zbic-zstd/zstd.h",
+          "upstream_path": "src/zstd.h",
+          "sha256": "787f615a8d12e62811dc198c3003bccf035756da1a953ee5d182ca92849b276a"
+        },
+        {
+          "file": "third_party/zbic-zstd/zstd_errors.h",
+          "upstream_path": "src/zstd_errors.h",
+          "sha256": "8336c9edf7c11fa7e3730efb05895d4619148f215849a820705e2e3819238cb2"
+        }
+      ]
     }
   ]
 }

@@ -41,3 +41,12 @@
 "Installs LZ4 in a separate NX2 environment for compressed modules." = "Instala LZ4 en un entorno propio de NX2 para los módulos comprimidos.";
 "Preparing validation tools" = "Preparando herramientas de validación";
 "Validation tools ready" = "Herramientas de validación listas";
+"Choose a registered NX2 resource library" = "Elige una biblioteca de recursos registrada en NX2";
+"Checking optional resources" = "Comprobando los recursos opcionales";
+"Resource candidates verified · game compatibility pending" = "Recursos candidatos verificados · compatibilidad con el juego pendiente";
+"Mii and font resources are optional candidates. Switch 2 compatibility remains unverified." = "Los datos de Mii y las fuentes son candidatos opcionales. Su compatibilidad con Switch 2 aún no se ha comprobado.";
+"Source firmware" = "Firmware de origen";
+"Verified files" = "Archivos verificados";
+"Choose resource library…" = "Elegir biblioteca de recursos…";
+"Remove selection" = "Quitar selección";
+"Optional system resources" = "Recursos del sistema opcionales";

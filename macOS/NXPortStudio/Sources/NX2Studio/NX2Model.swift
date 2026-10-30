@@ -33,7 +33,17 @@ struct NX2Inspection: Decodable, Sendable {
 
 private struct NX2Result: Decodable {
     let error: String?
+    let hint: String?
     let workspace: String?
+    let report: NX2Inspection?
+}
+
+struct NX2Resources: Decodable, Sendable {
+    let catalog: String
+    let firmware_version: String
+    let source_platform: String
+    let file_count: Int
+    let switch2_compatibility: String
 }
 
 @MainActor @Observable
@@ -41,21 +51,39 @@ final class NX2Model {
     var gameURL: URL?
     var inspection: NX2Inspection?
     var workspaceURL: URL?
+    var resourcesURL: URL?
+    var resources: NX2Resources?
     var destination = "macOS"
     var isBusy = false
     var failure: String?
     var status = "Waiting for an extracted dump"
-    @ObservationIgnored let runner = ProcessRunner()
+    @ObservationIgnored let runner: ProcessRunner
+    @ObservationIgnored private let preferences: UserDefaults
+    @ObservationIgnored private let executeCommand: @Sendable (ProcessCommand) async throws -> ProcessResult
     @ObservationIgnored private var task: Task<Void, Never>?
+
+    init(preferences: UserDefaults = .standard, runner: ProcessRunner = ProcessRunner(),
+         executor: (@Sendable (ProcessCommand) async throws -> ProcessResult)? = nil) {
+        self.preferences = preferences
+        self.runner = runner
+        self.executeCommand = executor ?? { command in try await runner.run(command) }
+        if let path = preferences.string(forKey: "nx2ResourcesPath") {
+            self.resourcesURL = URL(fileURLWithPath: path)
+        }
+    }
 
     var repositoryURL: URL {
         if let bundled = Bundle.main.resourceURL?.appendingPathComponent("nx2-engine"),
            FileManager.default.fileExists(atPath: bundled.appendingPathComponent("scripts/nx2.py").path) {
             return bundled
         }
+        #if DEBUG
         return URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
+        #else
+        return Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/nx2-engine")
+        #endif
     }
 
     private var environmentURL: URL {
@@ -90,11 +118,17 @@ final class NX2Model {
     }
 
     func chooseGame() {
+        guard !isBusy else { return }
         let panel = NSOpenPanel()
         panel.title = nx2t("Choose the folder containing exefs and romfs")
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         guard panel.runModal() == .OK, let selected = panel.url else { return }
+        selectGame(selected)
+    }
+
+    func selectGame(_ selected: URL) {
+        guard !isBusy else { return }
         gameURL = selected
         inspection = nil
         workspaceURL = nil
@@ -104,6 +138,8 @@ final class NX2Model {
 
     func inspect() {
         guard !isBusy, let gameURL else { return }
+        inspection = nil
+        workspaceURL = nil
         begin(status: "Validating decrypted files") {
             let result = try await self.run(["inspect", gameURL.path, "--json"])
             self.inspection = try JSONDecoder().decode(NX2Inspection.self, from: Data(result.utf8))
@@ -122,17 +158,55 @@ final class NX2Model {
         let name = (inspection?.metadata.program_id ?? "game") + "-nx2-" + UUID().uuidString.prefix(8)
         let output = parent.appendingPathComponent(name, isDirectory: true)
         let platform = destination
+        let selectedResources = resourcesURL
+        workspaceURL = nil
+        inspection = nil
         begin(status: "Preparing workspace") {
-            let result = try await self.run(["prepare", gameURL.path, "--output", output.path,
-                                             "--platform", platform, "--json"])
+            var arguments = ["prepare", gameURL.path, "--output", output.path, "--platform", platform, "--json"]
+            if let selectedResources { arguments += ["--resources", selectedResources.path] }
+            let result = try await self.run(arguments)
             let response = try JSONDecoder().decode(NX2Result.self, from: Data(result.utf8))
             guard let path = response.workspace else {
                 throw PortError.invalidConfiguration("The tool returned no workspace path.")
             }
             self.workspaceURL = URL(fileURLWithPath: path)
+            self.inspection = response.report
             self.status = "Workspace prepared · native export pending"
         }
     }
+
+    func chooseResources() {
+        guard !isBusy else { return }
+        let panel = NSOpenPanel()
+        panel.title = nx2t("Choose a registered NX2 resource library")
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        if let resourcesURL { panel.directoryURL = resourcesURL.deletingLastPathComponent() }
+        guard panel.runModal() == .OK, let selected = panel.url else { return }
+        selectResources(selected)
+    }
+
+    func selectResources(_ selected: URL) {
+        guard !isBusy else { return }
+        resources = nil
+        resourcesURL = nil
+        preferences.removeObject(forKey: "nx2ResourcesPath")
+        begin(status: "Checking optional resources") {
+            let output = try await self.run(["resources", "registered", selected.path, "--json"])
+            self.resources = try JSONDecoder().decode(NX2Resources.self, from: Data(output.utf8))
+            self.resourcesURL = selected
+            self.preferences.set(selected.path, forKey: "nx2ResourcesPath")
+            self.status = "Resource candidates verified · game compatibility pending"
+        }
+    }
+
+    func clearResources() {
+        guard !isBusy else { return }
+        resources = nil; resourcesURL = nil
+        preferences.removeObject(forKey: "nx2ResourcesPath")
+    }
+
+    func waitForCurrentOperation() async { await task?.value }
 
     func cancel() { task?.cancel(); runner.cancel() }
 
@@ -142,7 +216,7 @@ final class NX2Model {
         self.status = status
         task = Task {
             defer { self.isBusy = false; self.task = nil }
-            do { try await operation() }
+            do { try Task.checkCancellation(); try await operation() }
             catch is CancellationError { self.status = "Cancelled" }
             catch { self.failure = error.localizedDescription; self.status = "Input needs attention" }
         }
@@ -153,10 +227,11 @@ final class NX2Model {
                                      arguments: ["-B", repositoryURL.appendingPathComponent("scripts/nx2.py").path] + arguments,
                                      workingDirectoryURL: repositoryURL,
                                      environment: ["PYTHONDONTWRITEBYTECODE": "1"])
-        let result = try await runner.run(command)
+        let result = try await executeCommand(command)
+        try Task.checkCancellation()
         guard result.exitCode == 0 else {
             let decoded = try? JSONDecoder().decode(NX2Result.self, from: Data(result.output.utf8))
-            throw PortError.invalidConfiguration(decoded?.error ?? result.output)
+            throw PortError.invalidConfiguration([decoded?.error ?? result.output, decoded?.hint].compactMap { $0 }.joined(separator: "\n"))
         }
         return result.output
     }

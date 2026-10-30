@@ -10,7 +10,7 @@ from pathlib import Path
 
 from nx2.formats import DumpError, read_npdm, read_nso
 from nx2.pipeline import REPOSITORY, inspect_dump, prepare
-from nx2.tests.fixtures import dump, npdm, nso
+from nx2.tests.fixtures import dump, npdm, nso, romfs_image
 
 
 class DumpTests(unittest.TestCase):
@@ -100,8 +100,7 @@ class DumpTests(unittest.TestCase):
     def test_romfs_image_and_ambiguous_names(self):
         import shutil
         shutil.rmtree(self.root / "romfs")
-        image = bytearray(0x50)
-        struct.pack_into("<Q", image, 0, 0x50)
+        image = romfs_image()
         (self.root / "RomFS.img").write_bytes(image)
         self.assertEqual(inspect_dump(self.root)["input"]["romfs_kind"], "image")
         (self.root / "second.romfs").write_bytes(image)

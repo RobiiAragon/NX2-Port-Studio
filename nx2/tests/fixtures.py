@@ -22,15 +22,23 @@ def npdm(*, switch2=True, program_id=0x0400C3F00006E000):
     return data + aci + acid
 
 
-def nso(*, compressed=False, text=None):
-    text = text or struct.pack("<4I", 0xd503201f, 0xd65f0fff, 0xd4000021, 0xd65f03c0)
-    segments = [text, b"original-synthetic-ro", b"synthetic-data"]
+def nso(*, compressed=False, text=None, ro=None):
+    text = text if text is not None else struct.pack("<4I", 0xd503201f, 0xd65f0fff, 0xd4000021, 0xd65f03c0)
+    segments = [text, ro if ro is not None else b"original-synthetic-ro", b"synthetic-data"]
     data = bytearray(0x100)
     data[:4] = b"NSO0"
-    struct.pack_into("<I", data, 0xc, 0x38 | (7 if compressed else 0))
+    struct.pack_into("<I", data, 0xc, 0x38 | (7 if compressed else 0) | (0x80 if compressed == "zbic" else 0))
     data[0x40:0x60] = bytes(range(32))
     for index, raw in enumerate(segments):
-        if compressed:
+        if compressed == "zbic":
+            import ctypes
+            from nx2.compression import library
+            buffer = ctypes.create_string_buffer(len(raw) * 2 + 256)
+            size = library().nx2_zbic_encode(raw, len(raw), buffer, len(buffer))
+            if size < 0:
+                raise ValueError("Synthetic ZBIC encoding failed")
+            stored = buffer.raw[:size]
+        elif compressed:
             import lz4.block
             stored = lz4.block.compress(raw, store_size=False)
         else:
@@ -40,6 +48,12 @@ def nso(*, compressed=False, text=None):
         data[0xa0 + index * 32:0xc0 + index * 32] = hashlib.sha256(raw).digest()
         data.extend(stored)
     return data
+
+
+def romfs_image():
+    header = struct.pack("<10Q", 0x50, 0x50, 4, 0x54, 0x18, 0x6c, 4, 0x70, 0, 0x70)
+    root = struct.pack("<6I", 0, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0)
+    return header + struct.pack("<I", 0) + root + struct.pack("<I", 0xffffffff)
 
 
 def dump(root: Path, *, compressed=False):

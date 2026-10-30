@@ -7,9 +7,9 @@ import re
 import struct
 from pathlib import Path
 
-
-class DumpError(ValueError):
-    """An incomplete, unsupported or damaged input, safe to show to the user."""
+from .errors import DumpError
+from .input_io import stable_file
+from .symbols import MAX_STRING_TABLE, MAX_SYMBOLS, read_symbols
 
 
 def region(data: bytes, offset: int, size: int, label: str) -> bytes:
@@ -19,9 +19,10 @@ def region(data: bytes, offset: int, size: int, label: str) -> bytes:
 
 
 def read_npdm(path: Path) -> dict:
-    if path.stat().st_size > 16 * 1024 * 1024:
-        raise DumpError("main.npdm exceeds the 16 MiB metadata limit")
-    data = path.read_bytes()
+    with stable_file(path) as (source, info):
+        if info.st_size > 16 * 1024 * 1024:
+            raise DumpError("main.npdm exceeds the 16 MiB metadata limit")
+        data = source.read(16 * 1024 * 1024 + 1)
     if len(data) < 0x80 or data[:4] != b"META":
         raise DumpError("main.npdm: missing or truncated META header")
     aci_off, aci_size, acid_off, acid_size = struct.unpack_from("<4I", data, 0x70)
@@ -41,12 +42,17 @@ def read_npdm(path: Path) -> dict:
         platform = "switch1"
     else:
         raise DumpError("main.npdm: unrecognized ACID layout")
-    services = []
+    services, caps, subranges = [], [], []
     for index, name in enumerate(("filesystem", "services", "capabilities")):
         offset, size = struct.unpack_from("<II", aci, 0x20 + index * 8)
         if size and offset < 0x40:
             raise DumpError(f"ACI0 {name}: overlaps its header")
         block = region(aci, offset, size, f"ACI0 {name}")
+        if size:
+            for start, end in subranges:
+                if max(offset, start) < min(offset + size, end):
+                    raise DumpError("ACI0 access-control tables overlap")
+            subranges.append((offset, offset + size))
         if name == "services":
             cursor = 0
             while cursor < len(block):
@@ -83,6 +89,7 @@ def read_npdm(path: Path) -> dict:
         "main_priority": data[0xe], "main_core": data[0xf],
         "core_range": cores, "services": services, "svcs": sorted(svcs),
         "signature_verified": False,
+        "sha256": hashlib.sha256(data).hexdigest(),
     }
 
 
@@ -90,13 +97,22 @@ MODULE_NAME = re.compile(r"(?:rtld|main|sdk|subsdk(?:[0-9]|[12][0-9]|3[01]))\Z")
 MAX_SEGMENT = 512 * 1024 * 1024
 
 
-def read_nso(path: Path, *, census: bool = False) -> dict:
-    size = path.stat().st_size
-    with path.open("rb") as source:
+def read_nso(path: Path, *, census: bool = False, symbols: bool = False) -> dict:
+    symbol_report = {"status": "not-requested"}
+    with stable_file(path) as (source, info):
+        size = info.st_size
         header = source.read(0x100)
         if len(header) != 0x100 or header[:4] != b"NSO0":
             raise DumpError(f"{path.name}: missing or truncated NSO0 header")
         flags = struct.unpack_from("<I", header, 0xc)[0]
+        whole_hash = hashlib.sha256(header)
+        remaining = size - len(header)
+        while remaining:
+            block = source.read(min(1024 * 1024, remaining))
+            if not block:
+                raise DumpError(f"{path.name}: file became truncated during hashing")
+            whole_hash.update(block)
+            remaining -= len(block)
         segments, file_ranges, memory_ranges = [], [], []
         cpu = {"SVC": 0, "RETAA": 0, "RETAB": 0, "PACIASP": 0,
                "PACIBSP": 0, "AUTIASP": 0, "AUTIBSP": 0}
@@ -104,14 +120,16 @@ def read_nso(path: Path, *, census: bool = False) -> dict:
                  0xd503237f: "PACIBSP", 0xd50323bf: "AUTIASP", 0xd50323ff: "AUTIBSP"}
         for index, name in enumerate(("text", "ro", "data")):
             offset, address, unpacked = struct.unpack_from("<III", header, 0x10 + 0x10 * index)
-            stored = struct.unpack_from("<I", header, 0x60 + 4 * index)[0]
             compressed = bool(flags >> index & 1)
+            # Uncompressed segments are read at their memory size. The compressed
+            # size field is not authoritative when that segment's flag is clear.
+            stored = struct.unpack_from("<I", header, 0x60 + 4 * index)[0] if compressed else unpacked
             if unpacked > MAX_SEGMENT:
                 raise DumpError(f"{path.name}: {name} exceeds the 512 MiB segment limit")
             if stored > MAX_SEGMENT + 8 * 1024 * 1024:
                 raise DumpError(f"{path.name}: stored {name} exceeds the bounded reader limit")
-            if not compressed and stored != unpacked:
-                raise DumpError(f"{path.name}: {name} has inconsistent uncompressed size")
+            if address % 0x1000 or (index == 0 and address != 0):
+                raise DumpError(f"{path.name}: {name} has an invalid page-aligned memory location")
             if stored and (offset < 0x100 or offset > size or stored > size - offset):
                 raise DumpError(f"{path.name}: {name} is truncated or overlaps the header")
             if unpacked and address + unpacked > 0x100000000:
@@ -125,23 +143,65 @@ def read_nso(path: Path, *, census: bool = False) -> dict:
             file_ranges.append((offset, offset + stored))
             memory_ranges.append((address, address + unpacked))
             source.seek(offset)
-            raw = source.read(stored)
+            # Streaming avoids materializing large uncompressed modules just to
+            # hash them. Code census and compressed segments need their bytes.
+            raw = None
+            digest = hashlib.sha256()
+            if compressed or (census and index == 0):
+                raw = source.read(stored)
+            else:
+                remaining = stored
+                while remaining:
+                    chunk = source.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise DumpError(f"{path.name}: {name} became truncated")
+                    digest.update(chunk)
+                    remaining -= len(chunk)
             if compressed:
                 if not stored and unpacked:
                     raise DumpError(f"{path.name}: empty compressed {name} segment")
-                try:
-                    import lz4.block
-                except ImportError as error:
-                    raise DumpError("Compressed NSO validation needs lz4: install requirements-nx2.txt") from error
-                try:
-                    raw = lz4.block.decompress(raw, uncompressed_size=unpacked) if unpacked else b""
-                except Exception as error:
-                    raise DumpError(f"{path.name}: invalid LZ4 {name} segment") from error
-            if len(raw) != unpacked:
+                if flags & 0x80:
+                    from .compression import decompress
+                    try:
+                        raw = decompress(raw, unpacked) if unpacked else b""
+                    except RuntimeError as error:
+                        raise DumpError(str(error), code="missing-zbic-decoder", hint="Build native tools or use the NX2 app.") from error
+                    except ValueError as error:
+                        raise DumpError(f"{path.name}: invalid ZBIC {name} segment: {error}") from error
+                else:
+                    try:
+                        import lz4.block
+                    except ImportError as error:
+                        raise DumpError("Compressed NSO validation needs lz4: install requirements-nx2.txt",
+                                        code="missing-lz4", hint="Use Prepare validation tools in the NX2 app.") from error
+                    if unpacked > stored * 255:
+                        raise DumpError(f"{path.name}: {name} claims more bytes than LZ4 can produce")
+                    try:
+                        raw = lz4.block.decompress(raw, uncompressed_size=unpacked) if unpacked else b""
+                    except lz4.block.LZ4BlockError as error:
+                        raise DumpError(f"{path.name}: invalid LZ4 {name} segment") from error
+            if raw is not None and len(raw) != unpacked:
                 raise DumpError(f"{path.name}: {name} decompressed to the wrong size")
+            if raw is not None:
+                digest.update(raw)
             checked = bool(flags >> (3 + index) & 1)
-            if checked and hashlib.sha256(raw).digest() != header[0xa0 + 32 * index:0xc0 + 32 * index]:
+            if checked and digest.digest() != header[0xa0 + 32 * index:0xc0 + 32 * index]:
                 raise DumpError(f"{path.name}: {name} SHA-256 mismatch; finish or repeat the dump")
+            if symbols and index == 1:
+                string_offset, string_size, symbol_offset, symbol_size = struct.unpack_from("<4I", header, 0x90)
+                if string_size == symbol_size == 0:
+                    symbol_report = {"status": "not-declared", "note": "NSO rodata tables absent; no import-coverage claim"}
+                else:
+                    if (string_size > MAX_STRING_TABLE or symbol_size > MAX_SYMBOLS * 24 or
+                        string_offset > unpacked or string_size > unpacked - string_offset or
+                        symbol_offset > unpacked or symbol_size > unpacked - symbol_offset):
+                        raise DumpError(f"{path.name}: dynamic symbol tables exceed rodata", code="invalid-symbols")
+                    def table(start, length):
+                        if raw is not None:
+                            return raw[start:start + length]
+                        source.seek(offset + start)
+                        return source.read(length)
+                    symbol_report = read_symbols(table(symbol_offset, symbol_size), table(string_offset, string_size))
             if census and index == 0:
                 if len(raw) % 4:
                     raise DumpError(f"{path.name}: text is not ARM64 word aligned")
@@ -152,8 +212,10 @@ def read_nso(path: Path, *, census: bool = False) -> dict:
                         cpu["SVC"] += 1
             segments.append({"name": name, "file_offset": offset, "memory_offset": address,
                              "stored_bytes": stored, "memory_bytes": unpacked,
-                             "compressed": compressed, "hash_verified": checked})
+                             "compressed": compressed, "compression": "zbic" if compressed and flags & 0x80 else "lz4" if compressed else "none",
+                             "hash_verified": checked, "sha256": digest.hexdigest()})
     return {"name": path.name, "file_bytes": size, "build_id": header[0x40:0x60].hex(),
             "bss_bytes": struct.unpack_from("<I", header, 0x3c)[0], "segments": segments,
             "cpu_census": cpu if census else None,
+            "sha256": whole_hash.hexdigest(), "symbols": symbol_report,
             "cpu_census_scope": "word patterns in text, may include embedded data" if census else None}

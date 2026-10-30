@@ -13,6 +13,7 @@ let package = Package(
         .target(name: "CLANRelay", publicHeadersPath: "include"),
         .target(name: "PortCore", dependencies: ["CLANRelay"]),
         .executableTarget(name: "NX2Studio", dependencies: ["PortCore"], resources: [.process("Resources")]),
+        .testTarget(name: "NX2StudioTests", dependencies: ["NX2Studio", "PortCore"]),
         .executableTarget(name: "PortStudio", dependencies: ["PortCore"], resources: [.copy("Resources")]),
         .testTarget(name: "PortCoreTests", dependencies: ["PortCore"]),
         .testTarget(name: "PortStudioTests", dependencies: ["PortStudio", "PortCore"])

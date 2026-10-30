@@ -31,10 +31,11 @@ No `prod.keys`, title keys or firmware are needed for this input stage. Encrypte
 NSP/XCI import is not part of the NX2 path. Whether a game needs particular system
 resources during execution must be established separately.
 
-The inspector checks the Switch 2 NPDM layout, module bounds, LZ4 decompression
-and the segment hashes declared by NSO files. It records full module build IDs,
-services and core/SVC declarations. RomFS checks cover presence and its basic
-image header, not full content integrity. The source files are read only.
+The inspector checks Switch 2 NPDM layout, module bounds, LZ4/ZBIC decompression
+and declared segment hashes. It fingerprints complete modules and metadata,
+detects concurrent file changes and optionally reads SDK imports/exports.
+RomFS image checks cover metadata ranges and the root entry, not full file
+payload integrity. Source files are read only.
 
 ## Get started
 
@@ -44,9 +45,11 @@ The desktop front end requires Apple Silicon, macOS 14+ and Swift 6 to build.
 ```sh
 python3 -m venv .nx2-build/venv
 .nx2-build/venv/bin/python -m pip install -r requirements-nx2.txt
+make -C native  # Ampere developer tool and bounded ZBIC decoder
 .nx2-build/venv/bin/python scripts/nx2.py inspect "/path/to/Mario Kart World" --cpu-census
 .nx2-build/venv/bin/python scripts/nx2.py prepare "/path/to/Mario Kart World" \
   --output "/path/to/private-work/MKW-NX2" --platform macOS
+.nx2-build/venv/bin/python scripts/nx2.py verify "/path/to/private-work/MKW-NX2"
 ```
 
 The workspace contains `inspection.json`, `build-plan.json`, the source pins and
@@ -54,6 +57,21 @@ a status note. It references the original game files without copying them.
 Choose a **new private output folder outside the repository and dump folder**.
 `--platform iOS` records the intended target; it does not generate or sign an IPA.
 `--json` emits a structured result, with nonzero exit status for an invalid input.
+`--symbols` adds declared dynamic imports/exports. Errors include stable codes
+and recovery hints when available. `verify` rechecks the prepared executable
+bytes and optional resources; it does not hash every RomFS file payload.
+
+### Optional Mii/font candidates
+
+```sh
+.nx2-build/venv/bin/python scripts/nx2.py resources import "/path/to/Studio/firmware-catalog" \
+  --source-platform switch1 --output "/path/to/private-resources/switch1-version"
+```
+
+Choose this registered library in the NX2 app or pass `--resources` to `prepare`.
+It is optional, versioned and separate from the original Studio library. Only
+supported Mii/shared-font files are imported, after hash checks; Switch 2 game
+compatibility is **unverified**. Already decrypted resources do not need keys.
 
 Run the new desktop app:
 
@@ -89,7 +107,7 @@ is implied. See [architecture and integration gaps](docs/nx2/ARCHITECTURE.md).
 
 | Area | Evidence | Limit |
 | --- | --- | --- |
-| Decrypted input | Synthetic Switch 2 NPDM/NSO, LZ4, declared SHA-256 | Real dump not supplied |
+| Decrypted input | Synthetic Switch 2 NPDM/NSO, LZ4/ZBIC, declared SHA-256 and fingerprints | Real dump not supplied |
 | Invalid input | Truncation, missing modules, empty RomFS, corrupt hashes, invalid ranges, symlinks | Not full RomFS/signature verification |
 | Workspace | Private output, preserved inputs, recorded builds/platform, refused overwrite | No game executable |
 | Ampere tool | Native build; exact synthetic EXIT and explicit rejection cases | Not a complete Ampere-to-Metal chain |
@@ -107,7 +125,9 @@ swift test --package-path macOS/NXPortStudio
 ## Next milestones
 
 See the [roadmap](ROADMAP.md), [Mario Kart World status](docs/nx2/MARIO_KART_WORLD.md)
-and [architecture](docs/nx2/ARCHITECTURE.md). Sharing ARM64 makes native CPU
+and [architecture](docs/nx2/ARCHITECTURE.md). [Research notes](docs/nx2/RESEARCH.md)
+catalog 22 native/runtime/tooling repositories and relevant primary documentation.
+Sharing ARM64 makes native CPU
 execution possible after rewriting; it does not implement NVN2, Metal shaders,
 memory management or Horizon services automatically.
 
