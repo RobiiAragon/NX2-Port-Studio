@@ -140,6 +140,8 @@ See the [roadmap](ROADMAP.md), [Bananza diagnostics](docs/nx2/DONKEY_KONG_BANANZ
 [Mario Kart World status](docs/nx2/MARIO_KART_WORLD.md)
 and [architecture](docs/nx2/ARCHITECTURE.md). [Research notes](docs/nx2/RESEARCH.md)
 catalog 27 native/runtime/tooling repositories and relevant primary documentation.
+The [SDK family comparison](docs/nx2/ABI_FAMILIES.md) records shared CPU layouts
+and the version boundaries that still need separate validation.
 Sharing ARM64 makes native CPU
 execution possible after rewriting; it does not implement NVN2, Metal shaders,
 memory management or Horizon services automatically.

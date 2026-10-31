@@ -6,6 +6,10 @@ relevant paths. README statements are maintainer claims, not NX2 gameplay tests.
 Metadata, READMEs and trees were collected; selected source files were read in
 detail. No third-party binaries or console exploits were run.
 
+The separate [cross-title SDK ABI audit](ABI_FAMILIES.md) compares the supplied
+SDK modules, shared CPU layouts and version/semantic differences. Its static
+reuse findings do not establish compatibility of the experimental renderer.
+
 ## Findings already used
 
 | Source | Checked material | Applied in NX2 |
