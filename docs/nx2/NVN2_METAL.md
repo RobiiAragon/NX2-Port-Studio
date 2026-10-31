@@ -119,6 +119,9 @@ to the code start after its header, so a scheduling word and NOP precede the
 unchanged Eden body. Relative branch distances are preserved. Tests through the
 actual locked translator verify the entry instruction, private spill and
 observable uniform-branch result, including scheduling boundaries.
+The locked package targets `osx-arm64`; its executable regression runs on Apple
+Silicon macOS. Linux still runs the portable lowering and parsing cases, without
+rebuilding or substituting a different translator DLL.
 
 The Eglantine source is an unmodified, GPL-3.0-or-later snapshot pinned in
 [the source lock](../../upstreams.lock.json). The adapter rejects computed

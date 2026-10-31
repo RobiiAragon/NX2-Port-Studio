@@ -1,8 +1,10 @@
 import json
 import os
+import platform
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -156,6 +158,8 @@ class AmpereTests(unittest.TestCase):
             self.assertIn("continuation integration", result.stderr)
             self.assertEqual(output, b"preserve-this" if preexisting else None)
 
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine().lower() in ("arm64", "aarch64"),
+                         "the pinned translator targets osx-arm64; native lowerer cases remain portable")
     @unittest.skipUnless(shutil.which("dotnet") and
                          (REPOSITORY / "dm/gfx/tools/dmsh_xlate_bin/dmsh_xlate.dll").is_file(),
                          "the pinned translator and dotnet are needed for the semantic fixture")
