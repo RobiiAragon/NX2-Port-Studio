@@ -38,6 +38,8 @@ jobs:
         # The locked translator is osx-arm64; its semantic regression runs on
         # Apple Silicon. Native lowering/parser cases run on both platforms.
         run: python -m unittest discover -s nx2/tests -v
+      - name: Shader-chain identity and native source attestation
+        run: python -m unittest dm.tools.tests.test_nsp_chain dm.tools.tests.test_nvn2_chain -v
       - name: Native NVN2 state codecs
         run: |
           clang -std=c11 -O2 -Wall -Wextra -Werror -I dm/gfx/nvn/include dm/gfx/tests/t_nvn2_state.c -o "${{ runner.temp }}/t_nvn2_state"
