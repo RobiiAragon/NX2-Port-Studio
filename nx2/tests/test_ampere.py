@@ -16,7 +16,7 @@ TOOL = Path(os.environ.get("NX2_AMPERE_TOOL", REPOSITORY / ".nx2-build/native/nx
 
 @unittest.skipUnless(TOOL.is_file(), "build native tool first: make -C native")
 class AmpereTests(unittest.TestCase):
-    def run_tool(self, words, *, preexisting=False, graphics=False, stage=1):
+    def run_tool(self, words, *, preexisting=False, graphics=False, stage=1, env=None):
         with tempfile.TemporaryDirectory(prefix="nx2-shader-") as temp:
             source, output = Path(temp) / "input.bin", Path(temp) / "output.bin"
             header = struct.pack("<32I", (stage << 10), *range(1, 32)) if graphics else b""
@@ -24,7 +24,7 @@ class AmpereTests(unittest.TestCase):
             source.write_bytes(original)
             if preexisting:
                 output.write_bytes(b"preserve-this")
-            result = subprocess.run([str(TOOL), *(["--graphics"] if graphics else []), str(source), str(output)], capture_output=True, text=True)
+            result = subprocess.run([str(TOOL), *(["--graphics"] if graphics else []), str(source), str(output)], capture_output=True, text=True, env=env)
             self.assertEqual(source.read_bytes(), original, "the source file must remain unchanged")
             return result, output.read_bytes() if output.exists() else None
 
@@ -39,6 +39,23 @@ class AmpereTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertIn("unsupported", result.stderr)
         self.assertIsNone(output)
+
+    def test_matrix_multiply_is_rejected_independently_of_upstream_environment(self):
+        # Authored HMMA.16816.F16: distinct D/A/B/C fragments, followed by EXIT.
+        # The vendor's ambient "stub" mode would publish moves D=C, omitting A*B.
+        words = [0x0408723c, 12, 0x810, 0, 0x794d, 0, 0x03800000, 0]
+        for mode in (None, "", "stub", "emulate"):
+            env = os.environ.copy()
+            env.pop("EDEN_NX2_TENSOR", None)
+            if mode is not None:
+                env["EDEN_NX2_TENSOR"] = mode
+            for graphics in (False, True):
+                for preexisting in (False, True):
+                    with self.subTest(mode=mode, graphics=graphics, preexisting=preexisting):
+                        result, output = self.run_tool(words, graphics=graphics, preexisting=preexisting, env=env)
+                        self.assertEqual(result.returncode, 3)
+                        self.assertIn("HMMA semantics are not admitted", result.stderr)
+                        self.assertEqual(output, b"preserve-this" if preexisting else None)
 
     def test_missing_terminator_and_unaligned_code_produce_no_output(self):
         for words in ([0x7fff], [0x7918, 0, 0, 0]):

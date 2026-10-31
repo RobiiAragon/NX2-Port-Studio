@@ -146,6 +146,7 @@ Switch 2 memory isolation is established by this checkpoint.
 
 ## Found on this game
 
+- [Environment-independent matrix instruction admission](../reference/shaders.md#ambient-tensor-modes-must-not-change-offline-shader-semantics), verified with an authored offline fixture during upstream review.
 - [Guest page-size query during RELRO initialization](../reference/memory.md#guest-page-size-query-during-relro-initialization).
 - [HID applet resources and JCMS setup](../reference/services.md#switch-2-hid-applet-resources-and-jcms-initialization).
 - [Owned transfer and shared memory](../reference/memory.md#owned-transfer-and-shared-memory-handles).

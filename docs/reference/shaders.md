@@ -2,6 +2,15 @@
 
 Finding, keying and translating shaders (`dm/gfx/tools/shader_split.py`, `dmsh_build.py`, `dmsh_xlate`, `Program.cs`) and their pipelines. Each entry: symptom, cause, fix, the games it was found on. The [symptom index](../agents/symptoms.md) lists every symptom.
 
+## Native shader admission
+
+### Ambient tensor modes must not change offline shader semantics
+
+- **Symptom:** the same Ampere input can fail, expand to matrix arithmetic, or lower to moves that omit the multiplication, depending on an environment variable absent from the shader cache identity.
+- **Cause:** the vendored Eglantine HMMA path reads `EDEN_NX2_TENSOR`; its diagnostic `stub` mode implements `D=C`. Source attestation alone cannot make that behavior deterministic.
+- **Fix:** the native adapter rejects HMMA before calling the vendor lowerer, in both raw and graphics modes. No tensor mode is admitted. An authored HMMA/EXIT fixture checks unset, empty, `stub` and expansion settings, preserving the source and any existing output. The source lock and chain header must be regenerated, then the scoped shaders and host rebuilt.
+- **Found on:** [Donkey Kong Bananza](../nx2/DONKEY_KONG_BANANZA.md#found-on-this-game), during static upstream review and an authored offline regression. This does not establish that a game invoked HMMA, or validate a tensor implementation.
+
 ## Containers by engine
 
 ### BNSH in NintendoWare archives and in main

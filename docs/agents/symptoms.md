@@ -394,6 +394,7 @@ One line per symptom in the [subsystem references](../reference/): what you see 
 
 ## Shaders
 
+- the same Ampere input can fail, expand to matrix arithmetic, or lower to moves that omit the multiplication, depending on an environment variable absent from the shader cache identity. → [Ambient tensor modes must not change offline shader semantics](../reference/shaders.md#ambient-tensor-modes-must-not-change-offline-shader-semantics)
 - offline pipeline packing fails in `metal-tt` with `Fragment input(s) user(locn0),user(locn1),user(locn2) mismatching vertex shader output type(s) or not written by vertex shader`; the device prebuild reports the same pair as a failed base. → [BAHS intermediate stages are not direct pipeline pairs](../reference/shaders.md#bahs-intermediate-stages-are-not-direct-pipeline-pairs)
 - `shader_split.py` finds 0 shaders in a RomFS of zstd files named `.zst`. → [Zstd files recognised by their magic](../reference/shaders.md#zstd-files-recognised-by-their-magic)
 - a provisional split finds only a fraction of the shaders (3,126 of Pokémon Sword's 41,516). → [BNSH entries of GFPAK archives](../reference/shaders.md#bnsh-entries-of-gfpak-archives)

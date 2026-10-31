@@ -57,6 +57,14 @@ int main(int argc, char** argv) {
             const auto op = insn.Bits(0, 12);
             if (op == 0x949 || op == 0x958)
                 throw std::runtime_error("Computed branches require native address-map integration");
+            // The vendored HMMA path is controlled by EDEN_NX2_TENSOR and
+            // includes a D=C diagnostic stub. Neither that stub nor the opt-in
+            // expansion is admitted by this adapter. Reject before consulting
+            // the vendor code, regardless of the invoking process's environment.
+            if (op == 0x23c) {
+                std::cerr << "Unsupported native matrix multiply: HMMA semantics are not admitted\n";
+                return 3;
+            }
         }
         const auto lowered = Shader::Ampere::LowerToMaxwell(code);
         if (!lowered) {
