@@ -12,9 +12,9 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE); imp
 OWN = re.compile(r'(spirv-cross|metal_macosx|metal_iphoneos): lock (.*) / actual (?!missing$)(.*)')   # a missing compiler still stops the build
 strict = dmsh_chain.check_tools
 
-def check_tools():
+def check_tools(include_nvn2=False):
     bad, own = [], []
-    for b in strict(): (own if OWN.fullmatch(b) else bad).append(b)
+    for b in strict(include_nvn2=include_nvn2): (own if OWN.fullmatch(b) else bad).append(b)
     if own and not bad: print('note: built with this Mac\'s compilers, not the ones the shaders were tested with (dmsh_chain.lock): ' +
                   '; '.join(f'{m[1]} {m[3]} (tested: {m[2]})' for m in map(OWN.fullmatch, own)), flush=True)
     return bad

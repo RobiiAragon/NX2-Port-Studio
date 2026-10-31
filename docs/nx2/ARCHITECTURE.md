@@ -82,12 +82,16 @@ execution project; Eden's x86 CPU JIT is not copied into the runtime.
 
 ## Standalone Ampere work
 
-The original Eden NX2 lowerer is pinned in `third_party/eden-nx2`. Its portable
-C++ wrapper builds natively on Apple Silicon and translates raw 16-byte Ampere
+The original Eden NX2 lowerer is pinned in `third_party/eden-nx2`; the current
+tool uses the newer Eden-derived snapshot in `third_party/eglantine-nx2`.
+Its portable C++ wrapper builds natively on Apple Silicon and translates raw 16-byte Ampere
 instructions into intermediate 8-byte Maxwell words. It rejects unsupported
 instructions and computed branches that need Eden's native-address-map ABI.
-The output has no shader header, scheduling words, reflection or Metal bindings.
-It must not be fed to the inherited shader compiler without those adapters.
+Raw output has no shader header, scheduling words, reflection or Metal bindings.
+The separate `--graphics` mode adapts native VS/PS headers and scheduling slots
+for the locked translator. It rejects the remaining graphics stages. Runtime
+control-data reflection and bindings still require integration. See the
+[experimental NVN2 boundary](NVN2_METAL.md).
 
 The synthetic suite verifies exact EXIT output, malformed input, unsupported
 opcodes, computed-branch refusal and preservation of existing output. It does
@@ -98,7 +102,7 @@ for the entire instruction set, or image correctness.
 
 [upstreams.lock.json](../../upstreams.lock.json) records the Studio base commit,
 the separately cloned nxnative reference revision, and Eden's branch/commit
-plus the SHA-256 of the one imported source file. nxnative main has not been
+plus the SHA-256 of its imported source and the newer Eglantine snapshot. nxnative main has not been
 wholesale merged over Studio's custom changes. Original license notices remain.
 The bounded ZBIC helper additionally pins the dual-licensed Zstandard C sources
 and uses their BSD option. [Research notes](RESEARCH.md) and the revision catalog

@@ -33,6 +33,7 @@ run: $(B)/t_heap_size $(B)/t_touch $(B)/t_gesture $(B)/t_oe $(B)/t_fs $(B)/t_fs_
 	$(B)/t_vorbis_divides
 	$(B)/t_movie_vpx
 	$(B)/t_hid
+	$(B)/t_hid_service
 	$(B)/t_haptics
 	$(B)/t_haptics_apple
 	$(B)/t_controls
@@ -161,9 +162,9 @@ $(B)/t_pctl: t_pctl.c ../hle_misc.c ../hle.h ../dm.h $(GAME_H) | $(B)
 	clang -O1 -Wall -Werror -Wno-unused-function -I.. $(GINC) -o $@ t_pctl.c
 $(B)/t_shared_font: t_shared_font.c ../hle_sdk16.c ../hle.h ../dm.h $(GAME_H) | $(B)
 	clang -O1 -Wall -Werror -Wno-unused-function -Wno-frame-address -I.. $(GINC) -o $@ t_shared_font.c
-$(B)/t_hid: t_hid.c ../hle_hid.c ../hle_haptics.c ../hle_haptics.h ../pad_slots.h ../dm_input.h ../hle.h ../dm.h $(GAME_H) | $(B)
+$(B)/t_hid: t_hid.c ../hle_hid.c ../hle_hid_service.h ../hle_haptics.c ../hle_haptics.h ../pad_slots.h ../dm_input.h ../hle.h ../dm.h $(GAME_H) | $(B)
 	clang -O1 -Wall -Werror -Wno-unused-function -I.. $(GINC) -o $@ t_hid.c ../hle_haptics.c
-$(B)/t_hid_tsan: t_hid.c ../hle_hid.c ../hle_haptics.c ../hle_haptics.h ../pad_slots.h ../dm_input.h ../hle.h ../dm.h $(GAME_H) | $(B)
+$(B)/t_hid_tsan: t_hid.c ../hle_hid.c ../hle_hid_service.h ../hle_haptics.c ../hle_haptics.h ../pad_slots.h ../dm_input.h ../hle.h ../dm.h $(GAME_H) | $(B)
 	clang -O1 -g -fsanitize=thread -Wall -Werror -Wno-unused-function -I.. $(GINC) -o $@ t_hid.c ../hle_haptics.c
 $(B)/t_haptics: t_haptics.c ../hle_haptics.c ../hle_haptics.h ../dm_input.h | $(B)
 	clang -O1 -g -Wall -Werror -I.. -o $@ t_haptics.c ../hle_haptics.c
@@ -209,7 +210,18 @@ tsan: $(B)/t_audio_spsc_tsan $(B)/t_hid_tsan
 	$(B)/t_hid_tsan
 
 MEM_FLAGS = -O1 -Wall -Werror -Wno-unused-function -Imemory_profile -I..
-MEM_DEPS = t_svc_memory.c memory_profile/game_profile.h ../hle_svc.c ../hle_guestthread.c ../hle.h ../dm.h
+MEM_DEPS = t_svc_memory.c memory_profile/game_profile.h ../hle_svc.c ../memory_objects.inc ../hle_memory.h ../hle_guestthread.c ../hle.h ../dm.h
+HID_SERVICE_DEPS = t_hid_service.c memory_profile/game_profile.h ../hle_svc.c ../memory_objects.inc ../hle_memory.h ../hle_sf.c ../hle_hid_service.c ../hle_hid_service.h ../hle.h ../dm.h
+run: $(B)/t_hid_service
+$(B)/t_hid_service: $(HID_SERVICE_DEPS) | $(B)
+	clang $(MEM_FLAGS) -o $@ t_hid_service.c
+$(B)/t_hid_service_asan: $(HID_SERVICE_DEPS) | $(B)
+	clang $(MEM_FLAGS) -fsanitize=address,undefined -o $@ t_hid_service.c
+.PHONY: hid-service hid-service-sanitize
+hid-service: $(B)/t_hid_service
+	$(B)/t_hid_service
+hid-service-sanitize: $(B)/t_hid_service_asan
+	$(B)/t_hid_service_asan
 $(B)/t_svc_memory: $(MEM_DEPS) | $(B)
 	clang $(MEM_FLAGS) -fsanitize=undefined -o $@ t_svc_memory.c
 $(B)/t_svc_memory_unlimited: $(MEM_DEPS) | $(B)

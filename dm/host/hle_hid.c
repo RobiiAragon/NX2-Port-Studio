@@ -6,6 +6,7 @@
 // Vibration follows the player assignments through hle_haptics.c. Mouse and keyboard: not connected; the controller applet reports the connected players with player 1 selected.
 #include "hle.h"
 #include "hle_haptics.h"
+#include "hle_hid_service.h"
 #include "dm_input.h"
 #include "front.h"
 #include <stdatomic.h>
@@ -28,6 +29,7 @@ _Static_assert(sizeof(NpadState) == 0x28, "NpadState");
 // Front-end publishing: the keyboard / touch path (dm_input_set) and player 1's physical controller path (dm_pad_set) are ORed; each further player has a controller path of its own
 // (dm_pad_set_player). Press edges are latched until the game's next read so short presses are not lost
 static _Atomic uint64_t g_btn, g_axes, g_latch, g_pad_btn[DM_PLAYERS], g_pad_axes[DM_PLAYERS], g_pad_latch[DM_PLAYERS];
+static _Atomic uint64_t g_shared_latch, g_shared_pad_latch[DM_PLAYERS];
 static _Atomic int64_t g_sampling = 1 << 16;   // starts high so the history entries below the newest keep positive sampling numbers
 // Physical samples keep their guest-clock timestamps: a history read repeats the last real reading before each 5 ms slot rather than inventing motion between callbacks.
 enum { MOTION_HISTORY = 64 };
@@ -69,11 +71,13 @@ static void shake_note(void) {
 }
 void dm_input_set(uint64_t buttons, int32_t lx, int32_t ly, int32_t rx, int32_t ry) {
     uint64_t old = atomic_exchange(&g_btn, buttons); atomic_fetch_or(&g_latch, buttons & ~old); atomic_store(&g_axes, pack(lx, ly, rx, ry));
+    atomic_fetch_or(&g_shared_latch, buttons & ~old);
     shake_note();
 }
 void dm_pad_set_player(int p, uint64_t buttons, int32_t lx, int32_t ly, int32_t rx, int32_t ry) {
     if (p < 0 || p >= DM_PLAYERS) return;
     uint64_t old = atomic_exchange(&g_pad_btn[p], buttons); atomic_fetch_or(&g_pad_latch[p], buttons & ~old); atomic_store(&g_pad_axes[p], pack(lx, ly, rx, ry));
+    atomic_fetch_or(&g_shared_pad_latch[p], buttons & ~old);
     if (!p) shake_note();
 }
 void dm_pad_set(uint64_t buttons, int32_t lx, int32_t ly, int32_t rx, int32_t ry) { dm_pad_set_player(0, buttons, lx, ly, rx, ry); }
@@ -238,22 +242,22 @@ void dm_pad_players(uint32_t mask) {
     mask = (mask | 1u) & ((1u << DM_PLAYERS) - 1);
     uint32_t old = atomic_exchange(&g_players, mask);
     for (int p = 1; p < DM_PLAYERS; p++) if ((old ^ mask) >> p & 1) {
-        if (!(mask >> p & 1)) { dm_pad_set_player(p, 0, 0, 0, 0, 0); dm_motion_set_player(p, NULL); }   // a controller that went away leaves no input or sensor sample
+        if (!(mask >> p & 1)) { dm_pad_set_player(p, 0, 0, 0, 0, 0); atomic_store(&g_shared_pad_latch[p], 0); dm_motion_set_player(p, NULL); }   // a controller that went away leaves no input or sensor sample
         if (atomic_load(&g_ids_supported) & id_bit((uint32_t)p)) style_changed((uint32_t)p);
     }
     note_merged();
 }
 
-static void fill(NpadState *s, uint32_t id, uint32_t style) {
+static void fill_input(NpadState *s, uint32_t id, uint32_t style, int shared) {
     memset(s, 0, sizeof *s);
-    s->sampling = atomic_fetch_add(&g_sampling, 1) + 1;
+    s->sampling = shared ? 0 : atomic_fetch_add(&g_sampling, 1) + 1;
     if (!(style_of(id) & style)) return;   // no controller of this id / style: attributes = 0
     // Player 1: the keyboard / touch path, its controller path and those of the players merged into it; another player: its own controller path
     int pl = player_of(id); uint32_t src = pl ? 1u << pl : 1u | merged_players();
     uint64_t b = 0; int32_t a[4] = {0};
-    if (!pl) { b = atomic_load(&g_btn) | atomic_exchange(&g_latch, 0); uint64_t k = atomic_load(&g_axes); for (int i = 0; i < 4; i++) a[i] = ax(k, i); }
+    if (!pl) { b = atomic_load(&g_btn) | atomic_exchange(shared ? &g_shared_latch : &g_latch, 0); uint64_t k = atomic_load(&g_axes); for (int i = 0; i < 4; i++) a[i] = ax(k, i); }
     for (int p = 0; p < DM_PLAYERS; p++) if (src >> p & 1) {
-        b |= atomic_load(&g_pad_btn[p]) | atomic_exchange(&g_pad_latch[p], 0);
+        b |= atomic_load(&g_pad_btn[p]) | atomic_exchange(shared ? &g_shared_pad_latch[p] : &g_pad_latch[p], 0);
         uint64_t v = atomic_load(&g_pad_axes[p]); for (int i = 0; i < 4; i++) a[i] = pick(a[i], ax(v, i));
     }
     s->lx = a[0]; s->ly = a[1]; s->rx = a[2]; s->ry = a[3];
@@ -269,6 +273,7 @@ static void fill(NpadState *s, uint32_t id, uint32_t style) {
     s->buttons = b;
     s->attributes = ATTR_CONNECTED | (id == NPAD_HANDHELD ? ATTR_WIRED | ATTR_LEFT_CONN | ATTR_LEFT_WIRED | ATTR_RIGHT_CONN | ATTR_RIGHT_WIRED : ATTR_LEFT_CONN | ATTR_RIGHT_CONN);
 }
+static void fill(NpadState *s, uint32_t id, uint32_t style) { fill_input(s, id, style, 0); }
 // GetNpadStates(out, n, id): newest first, n entries: the current state repeated with consecutive sampling numbers. The host keeps no history, but on hardware the
 // 16-entry history is always full, and games read all of it whatever count comes back: Super Mario Odyssey (main+0x93fc20) polls every controller slot each frame, which advances
 // the shared sampling number by about 16 per frame, and with only entry 0 written neither stick did anything in play (the camera did not turn at its first hint) while buttons
@@ -605,3 +610,53 @@ PALMA_FAIL("_ZN2nn3hid37SetPalmaDataBaseIdentificationVersionERKNS0_21PalmaConne
 PALMA_FAIL("_ZN2nn3hid19SuspendPalmaFeatureERKNS0_21PalmaConnectionHandleERKNS_4util10BitFlagSetILi32ENS0_12PalmaFeatureEEE", "feature suspension", h_hid_PalmaSuspend, const void *h, const void *f)
 PALMA_FAIL("_ZN2nn3hid16ReadPalmaPlayLogERKNS0_21PalmaConnectionHandleERKt", "play log read", h_hid_PalmaLogRead, const void *h, const uint16_t *i)
 PALMA_FAIL("_ZN2nn3hid17ResetPalmaPlayLogERKNS0_21PalmaConnectionHandleERKt", "play log reset", h_hid_PalmaLogReset, const void *h, const uint16_t *i)
+
+// Native SharedMemoryFormat: independently checked in the SDK's initializer and
+// NpadSharedMemoryAccessor::Attach, and against the public RingLifo definitions.
+// The native layout retains Npad at +0x9a00, ten 0x5000-byte entries, with 17
+// guarded 0x30-byte controller samples in each 0x350-byte ring. No guest vtable
+// address is needed: client reads use the ring fields, never virtual dispatch.
+typedef struct { uint64_t guard; NpadState state; } HidSharedSample;
+typedef struct { uint64_t vptr, capacity, tail, count; HidSharedSample samples[17]; } HidSharedNpadRing;
+_Static_assert(sizeof(HidSharedNpadRing) == 0x350, "native HID Npad RingLifo");
+static void hid_shared_npad_sample(uint8_t *memory, size_t offset, const NpadState *state, uint64_t sequence) {
+    HidSharedNpadRing *ring = (void *)(memory + offset);
+    unsigned tail = (unsigned)((__atomic_load_n(&ring->tail, __ATOMIC_ACQUIRE) + 1) % 17);
+    HidSharedSample *sample = &ring->samples[tail];
+    __atomic_store_n(&sample->guard, 0, __ATOMIC_RELEASE);
+    sample->state = *state; sample->state.sampling = (int64_t)sequence;
+    __atomic_store_n(&sample->guard, sequence, __ATOMIC_RELEASE);
+    __atomic_store_n(&ring->capacity, 17, __ATOMIC_RELEASE);
+    __atomic_store_n(&ring->tail, tail, __ATOMIC_RELEASE);
+    uint64_t count = __atomic_load_n(&ring->count, __ATOMIC_ACQUIRE);
+    __atomic_store_n(&ring->count, count < 16 ? count + 1 : 16, __ATOMIC_RELEASE);
+}
+void dm_hid_write_shared(void *destination, uint64_t sequence) {
+    uint8_t *memory = destination;
+    static const size_t absent_rings[] = {0, 0x400, 0x3400, 0x3800, 0x3ba00};
+    for (unsigned k = 0; k < sizeof absent_rings / sizeof *absent_rings; ++k)
+        __atomic_store_n((uint64_t *)(memory + absent_rings[k] + 8), 17, __ATOMIC_RELEASE);
+    static const unsigned offsets[] = {0x28, 0x378, 0x6c8, 0xa18, 0xd68, 0x10b8, 0x1408};
+    for (unsigned index = 0; index < 10; ++index) {
+        uint32_t id = index < 8 ? index : index == 8 ? NPAD_HANDHELD : 0x10;
+        uint32_t style = style_of(id);
+        size_t base = 0x9a00 + index * 0x5000;
+        __atomic_store_n((uint32_t *)(memory + base), style, __ATOMIC_RELEASE);
+        NpadState current; fill_input(&current, id, style, 1);
+        if (style) {
+            ctrl_color((uint32_t *)(memory + base + 8));
+            __atomic_store_n((uint32_t *)(memory + base + 0x419c), 4, __ATOMIC_RELEASE);
+            __atomic_store_n((uint32_t *)(memory + base + 0x41a0), 4, __ATOMIC_RELEASE);
+            __atomic_store_n((uint32_t *)(memory + base + 0x41a4), 4, __ATOMIC_RELEASE);
+        }
+        for (unsigned kind = 0; kind < 7; ++kind) {
+            NpadState state = current;
+            uint32_t wanted = kind < 5 ? 1u << kind : kind == 6 ? style : 0;
+            if (!(wanted & style)) memset(&state, 0, sizeof state);
+            hid_shared_npad_sample(memory, base + offsets[kind], &state, sequence);
+        }
+        static const unsigned six_offsets[] = {0x1758, 0x1e60, 0x2568, 0x2c70, 0x3378, 0x3a80};
+        for (unsigned k = 0; k < 6; ++k)
+            __atomic_store_n((uint64_t *)(memory + base + six_offsets[k] + 8), 17, __ATOMIC_RELEASE);
+    }
+}

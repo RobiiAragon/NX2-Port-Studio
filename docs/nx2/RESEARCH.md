@@ -1,6 +1,6 @@
 # Native Switch and Switch 2 source review
 
-Reviewed on 2026-10-30. [The source catalog](research-sources.json) records 22
+Reviewed on 2026-10-30. [The source catalog](research-sources.json) records 27
 repositories, their exact reviewed revisions, licenses reported by GitHub and
 relevant paths. README statements are maintainer claims, not NX2 gameplay tests.
 Metadata, READMEs and trees were collected; selected source files were read in
@@ -15,6 +15,7 @@ detail. No third-party binaries or console exploits were run.
 | [ZBIC](https://github.com/kinnay/zbic) / Atmosphère-derived Zstandard | The dual-licensed C amalgamation and single-frame decompression API | Pinned C files and a native bridge decoding into a bounded caller-owned buffer; no Python extension dependency. |
 | [D2R Mobile](https://github.com/d2r-mobile/d2r-mobile), [manosaba-ios](https://github.com/iceorange-dev/manosaba-ios), nxnative | Resource validation and RomFS identity approaches | Complete executable fingerprints and workspace re-verification, plus standard RomFS range checks. These are original NX2 implementations, not bulk imports. |
 | NX Port Studio's existing firmware importer | Versioned resource catalogs with per-file sizes and SHA-256 | Separate optional Mii/font candidate library, preserving declared origin and version, with no claim of Switch 2 compatibility. |
+| [Eglantine](https://github.com/Djihads80/Eglantine) | Eden-derived lowerer delta and native header/scheduling layout | Pinned GPL snapshot with RET link classification and 2D/array TXD fixes; VS/PS graphics packing adapter with a synthetic branch-boundary regression. |
 
 ZBIC uses the C files' BSD license option and preserves their notices. Other
 code is not copied merely because a repository is public. See the exact import
@@ -59,13 +60,18 @@ pins and hashes in [upstreams.lock.json](../../upstreams.lock.json).
 | [UberSlicer](https://github.com/nvnprogram/UberSlicer) | Research on NVN/NVN2 shader specialization/control data; narrow maintainer-tested game scope. No root license found; no code copied. |
 | [Switch 2 controller bridge](https://github.com/mlstr0m/switch2bridge-macos) | Future BLE/input reference. Not required to run ARM64 modules or translate shaders. |
 | [switch2loader](https://github.com/gr33k/switch2loader) | Console setup/transport project, not a native Apple game runtime. No setup or exploit executed. |
+| [NeXo2](https://github.com/NeXoNetwork/NeXo2-emu) | Experimental homebrew, Maxwell and Vulkan paths. The reviewed source does not provide a ready commercial NVN2/Metal backend. No code imported. |
+| [fOboromi](https://github.com/C-GBL/fOboromi) | SM86 decoder/handler reference with unimplemented operations; not proof of commercial-game execution. No code imported. |
+| [THZoria/HBLauncher](https://github.com/THZoria/HBLauncher) | Public GPU-app SDK docs for a SmileBASIC framework, including native RPC wrappers and controller capabilities. This is not an ARM64 NRO loader or Metal backend. License not identified; documentation reviewed without copying code or running console setup. |
+| [THZoria/NX_Firmware](https://github.com/THZoria/NX_Firmware) | Firmware catalog/release metadata, with no NVN2/Metal implementation identified. No firmware or release binaries downloaded. |
 | [Pound profile](https://github.com/pound-emu/.github), [Pound site](https://github.com/pound-emu/www) | Organization/website material in the reviewed repositories, not a usable runtime source contribution. |
 
 ## Decisions
 
 Keep native ARM64 execution plus API interception as the intended runtime path.
 Do not replace it with a front-end wrapper or assume a Vulkan driver implements
-NVN2. Keep the first target tied to actual Mario Kart World module build IDs.
+NVN2. Use the supplied Bananza build for current bring-up; Mario Kart World
+still awaits its own dump and exact module identities.
 Prioritize verified native CPU bring-up, shader containers/reflection, ISBE
 task/mesh semantics and memory lifetimes. Hardware, save and gameplay claims
 require the user's completed dump and real executions.

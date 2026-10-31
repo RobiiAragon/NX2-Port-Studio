@@ -6,19 +6,58 @@
 #include <string.h>
 #include "nvn.h"
 #include "nvn_tex.h"
+#include "nvn2_abi.h"
+#include "nvn2_scratch.h"
 
 #define MAGIC(a, b, c, d) ((uint32_t)(a) | (uint32_t)(b) << 8 | (uint32_t)(c) << 16 | (uint32_t)(d) << 24)
 #define FITS(T, H) _Static_assert(sizeof(T) <= sizeof(H), #T " exceeds the reserved size of " #H)
 
-typedef struct { uint32_t flags; } dev_builder_t;                       FITS(dev_builder_t, NVNdeviceBuilder);
-typedef struct { uint32_t magic, flags, origin, depth_mode; void *dbg_cb, *dbg_data; } dev_t_;  FITS(dev_t_, NVNdevice);
+#if DM_GAME_NVN2
+// NVN2's defaults clear 24 bytes and SetFlags/GetFlags use byte offset 4.
+// Keep the reserved prefix: an SDK inline getter can read the builder directly.
+typedef struct { uint32_t reserved, flags; uint64_t padding[2]; } dev_builder_t;
+_Static_assert(sizeof(dev_builder_t) == 24, "NVN2 device builder extent");
+_Static_assert(__builtin_offsetof(dev_builder_t, flags) == 4, "NVN2 device builder flags offset");
+// NVN2 scalar accessors expose this prefix: origin+0, depth+4, flags+8.
+typedef struct { uint32_t origin, depth_mode, flags, magic; void *dbg_cb, *dbg_data; } dev_t_;
+#else
+typedef struct { uint32_t flags; } dev_builder_t;
+typedef struct { uint32_t magic, flags, origin, depth_mode; void *dbg_cb, *dbg_data; } dev_t_;
+#endif
+FITS(dev_builder_t, NVNdeviceBuilder);
+FITS(dev_t_, NVNdevice);
 
+#if DM_GAME_NVN2
+typedef struct {
+    uint64_t reserved; NVNdevice *dev; void *mem; NVNqueue *primary;
+    uint32_t flags; uint8_t has_cmd, has_comp, has_ctl, has_rt, has_flush, padding[3];
+    uint32_t cmd_sz, comp_sz, ctl_sz, rt_sz, mem_sz, flush; int32_t priority;
+} queue_builder_t;
+_Static_assert(sizeof(queue_builder_t) == 72 && __builtin_offsetof(queue_builder_t, dev) == 8 && __builtin_offsetof(queue_builder_t, cmd_sz) == 44 && __builtin_offsetof(queue_builder_t, priority) == 68, "NVN2 queue builder layout");
+#else
 typedef struct { NVNdevice *dev; uint32_t flags; uint64_t cmd_sz, comp_sz, ctl_sz, flush; void *mem; uint64_t mem_sz; } queue_builder_t;
 FITS(queue_builder_t, NVNqueueBuilder);
-typedef struct { uint32_t magic; NVNdevice *dev; uint64_t submits; } queue_t;                 FITS(queue_t, NVNqueue);
+#endif
+typedef struct queue_host {
+    uint32_t magic; NVNdevice *dev; uint64_t submits;
+#if DM_GAME_NVN2
+    const struct queue_host *primary;
+#endif
+} queue_t;
+FITS(queue_t, NVNqueue);
 
-typedef struct { NVNdevice *dev; void *mem; uint64_t size; uint32_t flags; } pool_builder_t;  FITS(pool_builder_t, NVNmemoryPoolBuilder);
-typedef struct { uint32_t magic, flags; uint8_t *mem; uint64_t size; } pool_t;                FITS(pool_t, NVNmemoryPool);
+#if DM_GAME_NVN2
+// Audited NVN2 builder accessors and the CPU-visible memory pool prefix. The
+// backend's GPU addresses alias its unified-memory CPU addresses.
+typedef struct { uint32_t reserved, flags; NVNdevice *dev; void *mem; uint64_t size; uint32_t storage_flags, padding; uint64_t external[2]; } pool_builder_t;
+typedef struct { uint32_t magic, reserved0; uint64_t reserved1; uint32_t flags, reserved2; uint8_t *gpu_mem; uint64_t reserved3[2]; uint8_t *mem; uint64_t size; } pool_t;
+_Static_assert(__builtin_offsetof(pool_builder_t, flags) == 4 && __builtin_offsetof(pool_builder_t, mem) == 16 && sizeof(pool_builder_t) == 56, "NVN2 pool builder prefix");
+_Static_assert(__builtin_offsetof(pool_t, flags) == 16 && __builtin_offsetof(pool_t, gpu_mem) == 24 && __builtin_offsetof(pool_t, mem) == 48 && __builtin_offsetof(pool_t, size) == 56, "NVN2 memory pool prefix");
+#else
+typedef struct { NVNdevice *dev; void *mem; uint64_t size; uint32_t flags; } pool_builder_t;
+typedef struct { uint32_t magic, flags; uint8_t *mem; uint64_t size; } pool_t;
+#endif
+FITS(pool_builder_t, NVNmemoryPoolBuilder); FITS(pool_t, NVNmemoryPool);
 
 typedef struct { const pool_t *pool; int64_t off; int32_t n; } dpool_t;                       // Texture / sampler descriptor pool
 FITS(dpool_t, NVNtexturePool); FITS(dpool_t, NVNsamplerPool);
@@ -46,16 +85,48 @@ FITS(view_t, NVNtextureView);
 _Static_assert(sizeof(view_t) <= 16, "view_t exceeds the newer SDKs' NVNtextureView (16 bytes)");
 
 // Sampler parameters (one copy shared by builder and object)
+#if DM_GAME_NVN2
+typedef struct {
+    float lod_min, lod_max, lod_bias, aniso, lod_snap, border[4];
+    uint32_t ws:4, wt:4, wr:4, reduction:4, minf:4, magf:4, cmp_mode:2, cmp_func:6;
+} samp_par;
+typedef struct { NVNdevice *dev; samp_par p; } samp_builder_t;
+typedef struct { uint32_t magic, reserved; NVNdevice *dev; samp_par p; uint64_t padding; } samp_t;
+_Static_assert(sizeof(samp_par) == 40 && __builtin_offsetof(samp_par, border) == 20, "NVN2 sampler parameter layout");
+_Static_assert(sizeof(samp_builder_t) == 48 && __builtin_offsetof(samp_builder_t, p) == 8, "NVN2 sampler builder layout");
+_Static_assert(sizeof(samp_t) == 64 && __builtin_offsetof(samp_t, p) == 16, "NVN2 sampler object layout");
+#else
 typedef struct { uint8_t minf, magf, ws, wt, wr, cmp_mode, cmp_func, reduction; float lod_min, lod_max, lod_bias, aniso, border[4]; } samp_par;   // Enum values are all < 256; reduction takes the padding byte
-typedef struct { NVNdevice *dev; samp_par p; } samp_builder_t;                                FITS(samp_builder_t, NVNsamplerBuilder);
-typedef struct { uint32_t magic; samp_par p; } samp_t;                                        FITS(samp_t, NVNsampler);
+typedef struct { NVNdevice *dev; samp_par p; } samp_builder_t;
+typedef struct { uint32_t magic; samp_par p; } samp_t;
+#endif
+FITS(samp_builder_t, NVNsamplerBuilder);
+#if DM_GAME_NVN2
+// The inherited NVN 1 header reserves only 48 bytes. NVN2 Initialize clears
+// 64 bytes and copies its 48-byte builder at +8; never use sizeof(NVNsampler)
+// to allocate an NVN2 object from that header.
+_Static_assert(sizeof(samp_t) <= 64, "NVN2 sampler extent");
+#else
+FITS(samp_t, NVNsampler);
+#endif
 
 // The per-stage shader keys are not kept in prog_t: the game's real NVNprogram may be smaller than the header's 0xC0 (growing prog_t corrupted the adjacent object in Mario); see prog_keys in hle_nvn.c
 typedef struct { uint32_t magic, nstage; NVNshaderData sd[6]; uint64_t serial; } prog_t;     FITS(prog_t, NVNprogram);   // serial: table key for the replay layer's resolved result
 
 typedef struct { uint32_t magic, fenced; uint64_t fence; } sync_t;   /* fenced 2: by WindowAcquireTexture */                           FITS(sync_t, NVNsync);
+#if DM_GAME_NVN2
+_Static_assert(sizeof(sync_t)<=32,"NVN2 sync object extent");
+#endif
 typedef struct { const pool_t *pool; int64_t off; } ev_builder_t;                             FITS(ev_builder_t, NVNeventBuilder);
-typedef struct { uint32_t magic; volatile uint32_t *val; } ev_t;                              FITS(ev_t, NVNevent);
+#if DM_GAME_NVN2
+// Native inline/API-visible prefix, initialized through byte39. The host magic
+// occupies the native reserved tail; copied events retain the pool and address.
+typedef struct { uint64_t address; volatile uint32_t *val; const pool_t *pool; int64_t off; uint32_t magic,padding; } ev_t;
+_Static_assert(sizeof(ev_t)==40 && __builtin_offsetof(ev_t,val)==8 && __builtin_offsetof(ev_t,pool)==16,"NVN2 event extent/prefix");
+#else
+typedef struct { uint32_t magic; volatile uint32_t *val; } ev_t;
+#endif
+FITS(ev_t, NVNevent);
 
 typedef struct { NVNdevice *dev; void *native; int32_t ntex, interval; NVNtexture *tex[4]; } win_builder_t;
 FITS(win_builder_t, NVNwindowBuilder);
@@ -76,7 +147,16 @@ typedef struct {
     NVNdevice *dev;
     uint64_t used;                       // Bytes written since the game last added command memory, across recordings and host segments, including segment-switch JUMPs (returned by GetCommandMemoryUsed)
     int32_t tex_base, samp_base;         // Host-table bases of the texture / sampler pool this command buffer last bound (hle_nvn.c dpool_add; 0 = the first pool of its kind)
+#if DM_GAME_NVN2
+    uint8_t *ctl_begin, *ctl_cur, *ctl_end;
+    uint8_t cb_enabled;
+    nvn2_scratch_reservation scratch;
+#endif
 } cmd_t;                                                                                   FITS(cmd_t, NVNcommandBuffer);
+
+#if DM_GAME_NVN2
+_Static_assert(sizeof(cmd_t)<=176,"NVN2 command buffer initialized extent");
+#endif
 
 // ---------- State objects (defaults follow the NVN / GL defaults) ----------
 typedef struct { uint32_t blend_en : 8, logic_op : 4, alpha_func : 4; } color_st;            FITS(color_st, NVNcolorState);
@@ -103,8 +183,9 @@ enum {
     OP_BIND_PROGRAM, OP_BIND_STATE, OP_BIND_VATTR, OP_BIND_VSTREAM, OP_BIND_VBUF,
     OP_BIND_UBO, OP_BIND_SSBO, OP_BIND_TEX, OP_BIND_SAMP,
     OP_STENCIL, OP_POLY_OFFSET, OP_DRAW, OP_DRAW_IDX, OP_DISPATCH, OP_BARRIER,
-    OP_SET_TEX_POOL, OP_SET_SAMP_POOL, OP_COPY_B2T, OP_COPY_STRIDE, OP_BLEND_COLOR, OP_COPY_T2B, OP_BIND_IMG, OP_COPY_T2T, OP_RESET_COUNTER, OP_CLEAR_TEX, OP_CLEAR_BUF, OP_DEPTH_CLAMP, OP_RENDER_COND, OP_FENCE_SYNC, OP_TF_BIND, OP_TF_STATE, OP_RAST_DISCARD, OP_VP_SWIZZLE, OP_BIND_TEX1, OP_PRIM_RESTART, OP_BIND_UBO_SMALL, OP_BIND_VBUF1, OP_COUNT_
+    OP_SET_TEX_POOL, OP_SET_SAMP_POOL, OP_COPY_B2T, OP_COPY_STRIDE, OP_BLEND_COLOR, OP_COPY_T2B, OP_BIND_IMG, OP_COPY_T2T, OP_RESET_COUNTER, OP_CLEAR_TEX, OP_CLEAR_BUF, OP_DEPTH_CLAMP, OP_RENDER_COND, OP_FENCE_SYNC, OP_TF_BIND, OP_TF_STATE, OP_RAST_DISCARD, OP_VP_SWIZZLE, OP_BIND_TEX1, OP_PRIM_RESTART, OP_BIND_UBO_SMALL, OP_BIND_VBUF1, OP_SCRATCH_RESERVATION, OP_COUNT_
 };
+typedef struct { nvn2_scratch_reservation reservation; uint64_t address; } p_scratch_reservation;
 // Payload (immediately follows op_hdr)
 typedef struct { int32_t n; const tex_t *color[8]; view_t cview[8]; uint8_t has_cview[8]; const tex_t *depth; view_t dview; uint8_t has_dview; } p_set_rt;
 typedef struct { int32_t index, mask; float rgba[4]; } p_clear_color;
@@ -232,6 +313,7 @@ int mtl_tex_gpu_owned(uint64_t serial);                                  // its 
 // A program's per-stage shader key (hle_nvn.c): the first 8 bytes of sha256(first 0x880 bytes of the control section (its own length when shorter) + code area). Computed at SetShaders (NVN lets the caller free the control section once it returns, and Unity does);
 // a stage whose code area was not yet in any memory pool then is computed the first time it is asked for. Returns 0 = no such stage
 int prog_key(const prog_t *p, unsigned stage, uint8_t key[8]);
+int nvn2_program_stage(const prog_t *p, unsigned index);
 void mtl_reg_samp(int id, const samp_par *p);
 void mtl_prog_release(prog_t *p);
 // New serial (> 0, globally increasing)

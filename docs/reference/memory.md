@@ -231,6 +231,15 @@ The guest address space, heaps, pools, virtual address memory and the allocators
 - **Fix:** `GetInfo(UserExceptionContextAddress)` must return a real buffer.
 - **Found on:** the source names no game.
 
+### Owned transfer and shared memory handles
+
+- **Symptom:** a native service receives no usable transfer handle after `CreateTransferMemory` reports success; a shared-memory view outlives its handle or cannot map at the SDK's chosen address.
+- **Cause:** SVC `0x15` had a success-only placeholder, without an owned object or pinned source. Shared mappings also need independent object references and a live alias, rather than a detached copy or an assumed address partition.
+- **Fix:** `hle_svc.c`, `memory_objects.inc` and `hle_memory.h` model owned transfer/shared objects, validated ranges and permissions, retained service/mapping references and read-only live aliases. Borrowing, decommit and heap shrink cannot overlap retained transfer sources. A shared view may use any free compatible interval in the guest address space, including the stack partition.
+- **Limits:** shared aliases require native-page alignment and reject unsupported sub-native mapping. Transfer owner permissions at sub-native boundaries are reported logically through `QueryMemory`; physical protection has the same native-page restriction as inherited borrowed stack sources. This is not complete arbitrary raw-SVC IPC support.
+- **Check:** `make -C dm/host/tests hid-service hid-service-sanitize`; ownership after sender close, stale handles, range/alignment checks, alias visibility, read-only mappings and final release are covered without game files.
+- **Found on:** [Donkey Kong Bananza](../nx2/DONKEY_KONG_BANANZA.md#hid-and-transfer-memory-initialization), initializing Switch 2 JCMS and its HID applet resource.
+
 ## Running out of memory
 
 ### A null-pool buffer from a game heap that ran out

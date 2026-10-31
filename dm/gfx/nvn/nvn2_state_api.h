@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#pragma once
+#include <string.h>
+#define NVN2_STATE_API(X) \
+    X(nvnBlendStateSetDefaults) \
+    X(nvnColorStateSetDefaults) \
+    X(nvnChannelMaskStateSetDefaults) \
+    X(nvnDepthStencilStateSetDefaults) \
+    X(nvnPolygonStateSetDefaults) \
+    X(nvnMultisampleStateSetDefaults) \
+    X(nvnBlendStateSetBlendTarget) \
+    X(nvnBlendStateGetBlendTarget) \
+    X(nvnBlendStateSetAdvancedMode) \
+    X(nvnBlendStateGetAdvancedMode) \
+    X(nvnBlendStateSetAdvancedOverlap) \
+    X(nvnBlendStateGetAdvancedOverlap) \
+    X(nvnBlendStateSetAdvancedPremultipliedSrc) \
+    X(nvnBlendStateGetAdvancedPremultipliedSrc) \
+    X(nvnBlendStateSetAdvancedNormalizedDst) \
+    X(nvnBlendStateGetAdvancedNormalizedDst) \
+    X(nvnColorStateSetLogicOp) \
+    X(nvnColorStateGetLogicOp) \
+    X(nvnColorStateSetAlphaTest) \
+    X(nvnColorStateGetAlphaTest) \
+    X(nvnDepthStencilStateSetDepthTestEnable) \
+    X(nvnDepthStencilStateGetDepthTestEnable) \
+    X(nvnDepthStencilStateSetDepthWriteEnable) \
+    X(nvnDepthStencilStateGetDepthWriteEnable) \
+    X(nvnDepthStencilStateSetDepthFunc) \
+    X(nvnDepthStencilStateGetDepthFunc) \
+    X(nvnDepthStencilStateSetStencilTestEnable) \
+    X(nvnDepthStencilStateGetStencilTestEnable) \
+    X(nvnPolygonStateSetCullFace) \
+    X(nvnPolygonStateGetCullFace) \
+    X(nvnPolygonStateSetFrontFace) \
+    X(nvnPolygonStateGetFrontFace) \
+    X(nvnPolygonStateSetPolygonMode) \
+    X(nvnPolygonStateGetPolygonMode) \
+    X(nvnPolygonStateSetPolygonOffsetEnables) \
+    X(nvnPolygonStateGetPolygonOffsetEnables) \
+    X(nvnMultisampleStateSetMultisampleEnable) \
+    X(nvnMultisampleStateGetMultisampleEnable) \
+    X(nvnMultisampleStateSetAlphaToCoverageEnable) \
+    X(nvnMultisampleStateGetAlphaToCoverageEnable) \
+    X(nvnMultisampleStateSetAlphaToCoverageDither) \
+    X(nvnMultisampleStateGetAlphaToCoverageDither) \
+    X(nvnMultisampleStateSetSamples) \
+    X(nvnMultisampleStateGetSamples) \
+    X(nvnMultisampleStateSetRasterSamples) \
+    X(nvnMultisampleStateGetRasterSamples) \
+    X(nvnMultisampleStateSetCoverageModulationMode) \
+    X(nvnMultisampleStateGetCoverageModulationMode) \
+    X(nvnMultisampleStateSetCoverageTruncationEnable) \
+    X(nvnMultisampleStateGetCoverageTruncationEnable) \
+    X(nvnMultisampleStateSetCoverageToColorEnable) \
+    X(nvnMultisampleStateGetCoverageToColorEnable) \
+    X(nvnMultisampleStateSetCoverageToColorOutput) \
+    X(nvnMultisampleStateGetCoverageToColorOutput) \
+    X(nvnMultisampleStateSetSampleLocationsEnable) \
+    X(nvnMultisampleStateGetSampleLocationsEnable) \
+    X(nvnMultisampleStateSetSampleLocationsGridEnable) \
+    X(nvnMultisampleStateGetSampleLocationsGridEnable) \
+    X(nvnBlendStateSetBlendFunc) \
+    X(nvnBlendStateGetBlendFunc) \
+    X(nvnBlendStateSetBlendEquation) \
+    X(nvnBlendStateGetBlendEquation) \
+    X(nvnColorStateSetBlendEnable) \
+    X(nvnColorStateGetBlendEnable) \
+    X(nvnChannelMaskStateSetChannelMask) \
+    X(nvnChannelMaskStateGetChannelMask) \
+    X(nvnDepthStencilStateSetStencilFunc) \
+    X(nvnDepthStencilStateGetStencilFunc) \
+    X(nvnDepthStencilStateSetStencilOp) \
+    X(nvnDepthStencilStateGetStencilOp) \
+    X(nvnMultisampleStateGetSampleLocationsGrid) \
+    X(nvnMultisampleStateSetSampleLocations) \
+    X(nvnCommandBufferBindBlendState) \
+    X(nvnCommandBufferBindColorState) \
+    X(nvnCommandBufferBindChannelMaskState) \
+    X(nvnCommandBufferBindMultisampleState) \
+    X(nvnCommandBufferBindPolygonState) \
+    X(nvnCommandBufferBindDepthStencilState)
+static inline int nvn2_state_abi_verified(const char *name) {
+#define N2_STATE_NAME(n) if (!strcmp(name,#n)) return 1;
+    NVN2_STATE_API(N2_STATE_NAME)
+#undef N2_STATE_NAME
+    return 0;
+}

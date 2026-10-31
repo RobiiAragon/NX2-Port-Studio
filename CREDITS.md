@@ -6,6 +6,8 @@ NX2 Port Studio derives from Robii Aragon’s NX Port Studio and is built on [nx
 
 Takoroka / Eden NX2 provides the GPL-3.0-or-later Ampere lowerer and public protocol reference. Its imported source is unmodified, attributed and pinned in [upstreams.lock.json](upstreams.lock.json), with its license under [third_party/eden-nx2](third_party/eden-nx2/README.md). New NX2 code and the derivative are GPL-3.0-or-later; inherited MIT source keeps its original notices. The root [LICENSE](LICENSE) covers the GPL additions and combined derivative.
 
+[Djihads80 / Eglantine](https://github.com/Djihads80/Eglantine) supplies the newer Eden-derived lowerer used by the offline graphics adapter. Its unmodified source, original notices and exact hash are retained in [third_party/eglantine-nx2](third_party/eglantine-nx2/README.md) and the same source lock. The earlier Eden snapshot remains available for provenance.
+
 The images below belong to inherited Switch 1 Studio documentation; they do not demonstrate NX2 gameplay.
 
 ## The foundation

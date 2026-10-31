@@ -102,13 +102,16 @@ The local bundle has an ad-hoc Mac signature, not a notarized public release.
 ```sh
 make -C native
 .nx2-build/native/nx2-ampere-lower captured-sm86-code.bin maxwell-words.bin
+.nx2-build/native/nx2-ampere-lower --graphics native-vs-or-ps.bin maxwell-graphics.bin
 ```
 
-This builds directly for the host architecture and uses Eden's pinned lowerer.
-It produces **intermediate Maxwell words**, without headers, scheduling words,
-reflection or Metal bindings. Unsupported instructions and computed branches
-requiring Eden's address-map ABI are rejected. No Metal or gameplay compatibility
-is implied. See [architecture and integration gaps](docs/nx2/ARCHITECTURE.md).
+This builds directly for the host architecture and uses the pinned,
+Eden-derived Eglantine lowerer. Raw mode produces **intermediate Maxwell words**.
+Graphics mode adapts the native vertex/fragment header and scheduling layout
+for the locked translator. Unsupported instructions, other graphics stages and
+computed branches requiring Eden's address-map ABI are rejected. Reflection,
+runtime bindings and rendering validation remain open. See
+[NVN2/Metal integration](docs/nx2/NVN2_METAL.md).
 
 ## What is verified
 
@@ -118,7 +121,8 @@ is implied. See [architecture and integration gaps](docs/nx2/ARCHITECTURE.md).
 | Invalid input | Truncation, missing modules, empty RomFS, corrupt hashes, invalid ranges, symlinks | Not full RomFS/signature verification |
 | Workspace | Private output, preserved inputs, recorded builds/platform, refused overwrite | No game executable |
 | CPU diagnostic | Bananza base/update reached `nnMain` in a private headless inherited host | Deliberate stop at graphics bootstrap; inherited service/memory assumptions |
-| Ampere tool | Synthetic cases plus two unique real Bananza primitive shaders | Intermediate words only; no Metal output or rendering validation |
+| Ampere tool | 4,543 accepted graphics intermediates from 4,609 BNSH identities; corrected primitive programs compiled to Metal | No title-wide Metal or game-draw validation; unsupported cases fail |
+| Experimental NVN2 | Base Bananza initializes Metal resources, real HID setup and two native graphics programs; authored GPU copy/readback passes | Virtual-memory and draw integration remain incomplete; no game image or export |
 | macOS front end | Swift build and shared CLI integration | No Switch 2 game boot |
 | iPhone | Intended target recorded | No IPA, device boot or gameplay tested |
 
@@ -135,7 +139,7 @@ swift test --package-path macOS/NXPortStudio
 See the [roadmap](ROADMAP.md), [Bananza diagnostics](docs/nx2/DONKEY_KONG_BANANZA.md),
 [Mario Kart World status](docs/nx2/MARIO_KART_WORLD.md)
 and [architecture](docs/nx2/ARCHITECTURE.md). [Research notes](docs/nx2/RESEARCH.md)
-catalog 22 native/runtime/tooling repositories and relevant primary documentation.
+catalog 27 native/runtime/tooling repositories and relevant primary documentation.
 Sharing ARM64 makes native CPU
 execution possible after rewriting; it does not implement NVN2, Metal shaders,
 memory management or Horizon services automatically.
@@ -146,8 +150,8 @@ project. Their compatibility and network results do not apply to Switch 2.
 
 ## Credits and license
 
-[Source pins](upstreams.lock.json) record all three repositories and the imported
-Eden header's SHA-256. [Credits](CREDITS.md) preserve authorship and dependency
+[Source pins](upstreams.lock.json) record repository revisions and imported
+source hashes, including both Eden and Eglantine. [Credits](CREDITS.md) preserve authorship and dependency
 notices. New NX2 code and the Eden derivative use **GPL-3.0-or-later**;
 inherited nxnative/Studio MIT code keeps its original notices, also retained in
 [LICENSE.nxnative](LICENSE.nxnative). Other dependencies retain their licenses.

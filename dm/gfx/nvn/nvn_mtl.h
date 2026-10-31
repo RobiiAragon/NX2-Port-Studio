@@ -38,6 +38,7 @@ uint64_t mtl_sub_commit(void);
 uint64_t mtl_last_fence(void);                       // Fence value of the most recent submit (0 = never submitted)
 int mtl_wait(uint64_t fence, uint64_t timeout_ns);   // Returns 1 when the GPU has completed up to fence, 0 on timeout
 int mtl_wait_acq(uint64_t fence, uint64_t timeout_ns);   // the same for a sync WindowAcquireTexture handed out (its own line in the wait ledger, DM_NVN_WAITS)
+int mtl_last_commit_error(void);
 void mtl_finish(void);                               // Wait for all submitted commands to complete
 void mtl_drain(void);                                // Wait for all commands on the queue (including presents) to complete: submit an empty command buffer and wait for it
 void mtl_xv_window_tex(uint64_t serial);   // Register a window (swapchain) texture: the cross-submit validity ledger never collects it
@@ -47,3 +48,8 @@ void *mtl_device_classic(void);   // the same for a layer that draws only on cla
 uint64_t mtl_ext_tex(void *tex);
 uint64_t mtl_present_ext(uint64_t serial, double period, void *ev, uint64_t ev_val, const int crop[4]);   // crop: x, y, w, h of the texture to show (NULL = all of it)
 void mtl_present_wait(uint64_t ticket);   // as in nvn_obj.h: wait until that present has been handed to the GPU
+
+// Diagnostic state of the last audited NVN2 reservation control record.
+void mtl_nvn2_scratch_state(uint64_t *address, uint64_t *size, uint64_t *records);
+
+int mtl_nvn2_program_prepare(const void *program);

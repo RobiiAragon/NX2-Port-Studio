@@ -105,15 +105,7 @@ def read_nso(path: Path, *, census: bool = False, symbols: bool = False) -> dict
         if len(header) != 0x100 or header[:4] != b"NSO0":
             raise DumpError(f"{path.name}: missing or truncated NSO0 header")
         flags = struct.unpack_from("<I", header, 0xc)[0]
-        whole_hash = hashlib.sha256(header)
-        remaining = size - len(header)
-        while remaining:
-            block = source.read(min(1024 * 1024, remaining))
-            if not block:
-                raise DumpError(f"{path.name}: file became truncated during hashing")
-            whole_hash.update(block)
-            remaining -= len(block)
-        segments, file_ranges, memory_ranges = [], [], []
+        segments, file_ranges, memory_ranges, layouts = [], [], [], []
         cpu = {"SVC": 0, "RETAA": 0, "RETAB": 0, "PACIASP": 0,
                "PACIBSP": 0, "AUTIASP": 0, "AUTIBSP": 0}
         fixed = {0xd65f0bff: "RETAA", 0xd65f0fff: "RETAB", 0xd503233f: "PACIASP",
@@ -142,6 +134,19 @@ def read_nso(path: Path, *, census: bool = False, symbols: bool = False) -> dict
                     raise DumpError(f"{path.name}: memory segments overlap")
             file_ranges.append((offset, offset + stored))
             memory_ranges.append((address, address + unpacked))
+            layouts.append((index, name, offset, address, unpacked, compressed, stored))
+        # Validate every declared range before hashing or decompressing payloads.
+        # Otherwise a damaged early stream can hide a later truncated segment.
+        whole_hash = hashlib.sha256(header)
+        source.seek(len(header))
+        remaining = size - len(header)
+        while remaining:
+            block = source.read(min(1024 * 1024, remaining))
+            if not block:
+                raise DumpError(f"{path.name}: file became truncated during hashing")
+            whole_hash.update(block)
+            remaining -= len(block)
+        for index, name, offset, address, unpacked, compressed, stored in layouts:
             source.seek(offset)
             # Streaming avoids materializing large uncompressed modules just to
             # hash them. Code census and compressed segments need their bytes.

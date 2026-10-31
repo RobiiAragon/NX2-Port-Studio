@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "reviewed_on": "2026-10-30",
-  "scope": "Repository metadata, README and source trees for 22 projects; selected source files inspected. Not execution or compatibility testing.",
+  "scope": "Repository metadata, README and source trees for 27 projects; selected source files inspected. Not execution or compatibility testing.",
   "repositories": [
     {
       "repo": "seedds/nxnative",
@@ -590,6 +590,97 @@
       "tree_truncated": false,
       "readme_url": "https://github.com/pound-emu/www/blob/main/README.md",
       "interesting_paths": []
+    },
+    {
+      "repo": "Djihads80/Eglantine",
+      "url": "https://github.com/Djihads80/Eglantine",
+      "description": "VERY experimental Nintendo Switch 2 emulator",
+      "commit": "de83c3140e2ab6856d9a1ec1fec1cee96958d087",
+      "date": "2026-10-30T23:11:38Z",
+      "license": "GPL-3.0",
+      "default_branch": "nx2",
+      "files": 4642,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/Djihads80/Eglantine/blob/de83c3140e2ab6856d9a1ec1fec1cee96958d087/README.md",
+      "interesting_paths": [
+        "README.md",
+        "src/shader_recompiler/frontend/ampere/lower_to_maxwell.h",
+        "src/video_core/shader_environment.cpp",
+        "src/shader_recompiler/frontend/ampere/program_address_map.h"
+      ],
+      "review": "Selected Ampere lowering and native scheduling paths reviewed. Only the pinned GPL lowerer is imported; no upstream modifications or third-party binaries executed."
+    },
+    {
+      "repo": "NeXoNetwork/NeXo2-emu",
+      "url": "https://github.com/NeXoNetwork/NeXo2-emu",
+      "description": "Experimental Nintendo Switch 2 emulator in C++.",
+      "commit": "7fa73a5062e64370163a248d1a0b555272012c0f",
+      "date": "2026-10-12T18:13:49Z",
+      "license": "GPL-3.0",
+      "default_branch": "main",
+      "files": 292,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/NeXoNetwork/NeXo2-emu/blob/7fa73a5062e64370163a248d1a0b555272012c0f/README.md",
+      "interesting_paths": [
+        "README.md",
+        "docs/07-nexo-internals/gpu-shaders.md",
+        "src/video_core/shader_decode.cpp",
+        "src/video_core/shader_spirv.cpp"
+      ],
+      "review": "Experimental homebrew/Maxwell and Vulkan source reference; not a commercial NVN2/Metal backend. No code imported."
+    },
+    {
+      "repo": "C-GBL/fOboromi",
+      "url": "https://github.com/C-GBL/fOboromi",
+      "description": "a proof-of-concept project for a possible Nintendo Switch 2 emulator. (fork)",
+      "commit": "f0880fdb5adaf1c4687762e29b4e5879c2a70d7c",
+      "date": "2026-04-02T21:42:12Z",
+      "license": "GPL-3.0",
+      "default_branch": "main",
+      "files": 62,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/C-GBL/fOboromi/blob/f0880fdb5adaf1c4687762e29b4e5879c2a70d7c/README.md",
+      "interesting_paths": [
+        "README.md",
+        "core/src/gpu/sm86.rs",
+        "core/src/gpu/sm86_decoder_generated.rs"
+      ],
+      "review": "SM86 decoder source reference with unimplemented operations; not a working commercial-game runtime. No code imported."
+    },
+    {
+      "repo": "THZoria/HBLauncher",
+      "url": "https://github.com/THZoria/HBLauncher",
+      "description": "SmileBASIC homebrew launcher and documented GPU app SDK, with Pico setup and a Hello World example.",
+      "commit": "7fdb2acec9f086e0c9fdf7665cdaa1ff772825af",
+      "date": "2026-10-23T16:17:48Z",
+      "license": null,
+      "default_branch": "main",
+      "files": 147,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/THZoria/HBLauncher/blob/7fdb2acec9f086e0c9fdf7665cdaa1ff772825af/README.md",
+      "interesting_paths": [
+        "README.md",
+        "sdk/docs/shaders.md",
+        "sdk/docs/native.md",
+        "sdk/docs/capabilities.md"
+      ],
+      "review": "Selected public SDK docs inspected. SmileBASIC GPU-app framework, not an ARM64 NRO loader or Metal backend. License not identified; no code imported or console setup executed."
+    },
+    {
+      "repo": "THZoria/NX_Firmware",
+      "url": "https://github.com/THZoria/NX_Firmware",
+      "description": "Firmware for the Nintendo Switch",
+      "commit": "d235cd789f1447e2ae63ab4588251c020c9c2222",
+      "date": "2026-09-10T05:22:26Z",
+      "license": null,
+      "default_branch": "main",
+      "files": 8,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/THZoria/NX_Firmware/blob/d235cd789f1447e2ae63ab4588251c020c9c2222/README.md",
+      "interesting_paths": [
+        "README.md"
+      ],
+      "review": "README/catalog metadata only. No runtime or NVN2/Metal code identified; no firmware or release assets downloaded."
     }
   ],
   "primary_documents": [

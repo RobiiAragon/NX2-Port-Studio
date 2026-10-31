@@ -3449,6 +3449,11 @@ static NvShader *shader_load(NSString *pc, int stage, int layer) {
     id<MTLLibrary> lib = lib_from_file(lp, &e);
     if (!lib || !j) { MLOG("[RED] failed to load shader %s: %s", pc.UTF8String, e ? e.localizedDescription.UTF8String : "no reflection json"); return nil; }
     if (![j[@"chain"] isEqual:@DMSH_CHAIN]) { MLOG("[RED] shader %s has translation chain version %s, but this host expects %s", pc.UTF8String, [[j[@"chain"] description] UTF8String], DMSH_CHAIN); return nil; }
+#if DM_GAME_NVN2
+    NSDictionary *nvn2=j[@"nvn2"];
+    if (![nvn2[@"control_version"] isEqual:@"201.11"] || ![nvn2[@"scratch"] isEqual:@"compiler-managed-private"])
+        MDIE("[RED] NVN2 shader library lacks the audited native-control/private-memory contract");
+#endif
     if (layer && !j[@"entry_layer"]) { MLOG("[RED] vertex shader %s has no layer entry points", pc.UTF8String); return nil; }
     NvShader *o = [NvShader new]; o->gs_loc = o->lay_loc = -1;
     if (stage == 0 && [j[@"layer_from"] isKindOfClass:[NSDictionary class]]) { o->lay_loc = [j[@"layer_from"][@"loc"] intValue]; o->lay_comp = [[j[@"layer_from"][@"comp"] description] UTF8String][0]; }
@@ -3612,6 +3617,9 @@ static __unsafe_unretained NvProg *prog_get(const prog_t *cp) {   // Called only
         uint8_t md[8]; prog_key(p, i, md);
         NSString *k = [NSString stringWithFormat:@"%02x%02x%02x%02x%02x%02x%02x%02x", md[0], md[1], md[2], md[3], md[4], md[5], md[6], md[7]];
         NSString *stage = g_shmap[k];
+#if DM_GAME_NVN2
+        if (!stage) MDIE("[RED] NVN2 shader %s has no validated translated package",k.UTF8String);
+#endif
         if (!stage) {   // Not in the package: look up the compute kernels embedded in the main body (nvn_builtin.h)
             NvShader *b = builtin_get(k.UTF8String);
             if (b) { o->sh[5] = b; continue; }
@@ -3625,13 +3633,32 @@ static __unsafe_unretained NvProg *prog_get(const prog_t *cp) {   // Called only
             continue;
         }
         int st = stage_of(stage);
+#if DM_GAME_NVN2
+        if (st!=nvn2_program_stage(p,i)) MDIE("[RED] NVN2 shader package stage disagrees with captured native control");
+#endif
         NvShader *sh = st >= 0 ? shader_get([k stringByAppendingString:@"_b"], st) : nil;
+#if DM_GAME_NVN2
+        if (!sh || !sh->fn) MDIE("[RED] NVN2 shader %s has no real Metal function",k.UTF8String);
+#endif
         if (sh) o->sh[st] = sh; else MLOG("[RED] shader %s (%s) failed to load: build the shaders with dm/gfx/tools/dmsh_build.py first", k.UTF8String, stage.UTF8String);
         if (!sh && st == 2) strlcpy(o->gs_miss, k.UTF8String, sizeof o->gs_miss);
     }
     prog_fold_gs(o);   // a slice-writing geometry shader: the vertex shader's layer entry points instead
     if (p->serial) serial_put(p->serial, o);
     return o;
+}
+int mtl_nvn2_program_prepare(const void *program) {
+#if DM_GAME_NVN2
+    const prog_t *p=program; NvProg *prepared=prog_get(p);
+    if (!prepared || !p->nstage) return 0;
+    for (unsigned i=0;i<p->nstage;i++) {
+        int stage=nvn2_program_stage(p,i);
+        if (stage<0 || stage>1 || !prepared->sh[stage] || !prepared->sh[stage]->fn) return 0;
+    }
+    return 1;
+#else
+    (void)program; return 0;
+#endif
 }
 void mtl_prog_release(prog_t *p) { if (p->serial) serial_del(p->serial); }
 
@@ -9213,6 +9240,32 @@ static void clear_ds_tri(const p_clear_ds *c) {
        (unsigned long)sc.x, (unsigned long)sc.y, (unsigned long)sc.width, (unsigned long)sc.height);
 }
 
+static uint64_t g_nvn2_scratch_address, g_nvn2_scratch_size, g_nvn2_scratch_records;
+void mtl_nvn2_scratch_state(uint64_t *address, uint64_t *size, uint64_t *records) {
+    if (address) *address=g_nvn2_scratch_address;
+    if (size) *size=g_nvn2_scratch_size;
+    if (records) *records=g_nvn2_scratch_records;
+}
+#if DM_GAME_NVN2
+static void nvn2_scratch_replay(const p_scratch_reservation *r) {
+    const pool_t *p=r->reservation.pool;
+    if (p && p->magic!=MAGIC('P','O','O','L')) MDIE("[RED] NVN2 scratch pool was finalized before submission");
+    if (nvn2_scratch_validate(p,p?(uintptr_t)p->gpu_mem:0,p?p->size:0,
+            (int64_t)r->reservation.offset,r->reservation.size,NULL)!=NVN2_SCRATCH_VALID)
+        MDIE("[RED] NVN2 scratch range is invalid at submission");
+    uint64_t address=r->reservation.size && p ? (uintptr_t)p->gpu_mem+r->reservation.offset : 0;
+    if (address!=r->address) MDIE("[RED] NVN2 scratch pool address changed before submission");
+    if (r->reservation.size) {
+        void *buffer=NULL; uint64_t off=0;
+        if (!p->mem || !mtl_addr(address,r->reservation.size,&buffer,&off))
+            MDIE("[RED] NVN2 positive scratch reservation has no Metal backing");
+        // Keep the optional reservation alive through this submission's completion.
+        // It is never encoded as a shader argument: MSL Private arrays are compiler-managed.
+        defer_obj_unref((__bridge id<MTLBuffer>)buffer);
+    }
+    g_nvn2_scratch_address=address; g_nvn2_scratch_size=r->reservation.size; ++g_nvn2_scratch_records;
+}
+#endif
 void mtl_exec(const uint8_t *p) {
     static int inited; if (!inited) { inited = 1; state_reset(); }
     static int dump_all = -1; if (dump_all < 0) dump_all = getenv("DM_NVN_PASSDUMP_ALL") != NULL;
@@ -9255,6 +9308,9 @@ void mtl_exec(const uint8_t *p) {
                     g_rc_skip = known && (rc->mode ? x == y : x != y);
                     PD("E %llu conditional render %s addr=%#llx values %llu / %llu%s%s", g_stat_pass, rc->mode ? "draw if not equal" : "draw if equal", (unsigned long long)rc->addr, (unsigned long long)x, (unsigned long long)y, known ? "" : " (unknown, drawn)", g_rc_skip ? " → not drawn" : ""); }
                 break; }
+#if DM_GAME_NVN2
+            case OP_SCRATCH_RESERVATION: nvn2_scratch_replay(a); break;
+#endif
             case OP_FENCE_SYNC: { sync_t *s; memcpy(&s, a, 8); s->fence = g_fence + 1; s->fenced = 1;   // the fence value this submission (segment) commits with
                 PD("Y fence_sync cmd=%p sync=%p fence=%llu", p, (void *)s, (unsigned long long)s->fence); break; }
             case OP_RESET_COUNTER: { uint64_t t; memcpy(&t, a, 8); g_cnt_reset[t & 31]++; PD("Q reset type=%llu cmd=%p", (unsigned long long)t, p);
