@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Current NVN2 reservation boundary only. No game, SDK or display surface.
-// MapVirtual is deliberately NOT called: its inherited implementation is not
-// admitted. This test proves no mapped alias or GPU/texture alias coherence.
+// MapVirtual is not called here: its fresh buffer subset has a separate fixture.
+// This test proves reservation boundaries, not GPU/texture alias coherence.
 #define DM_GAME_NVN2 1
 #define nvn_game_fps nvn_game_fps_mtl_default
 #include "../nvn/nvn_mtl.m"
@@ -64,12 +64,14 @@ static void rejected(pool_builder_t builder) {
 int main(void) { @autoreleasepool {
     struct rlimit no_core = {0, 0}; REQUIRE(!setrlimit(RLIMIT_CORE, &no_core), "core dumps disabled");
     crash_install(); mtl_init();
-    CHECK(!nvn2_common_abi_verified("nvnMemoryPoolMapVirtual"), "MapVirtual remains outside the audited API set");
+    CHECK(nvn2_common_abi_verified("nvnMemoryPoolMapVirtual"), "MapVirtual fresh-buffer adapter is audited");
     nvn_init_slots();
     unsigned slot = 0;
     while (slot < NVN_NFUNC && strcmp(nvn_names[slot], "nvnMemoryPoolMapVirtual")) ++slot;
     REQUIRE(slot < NVN_NFUNC, "MapVirtual has a resolver entry");
-    CHECK(nvn_slot[slot].fn == (void *)nvn_unimpl_entry, "resolver retains the explicit unimplemented guard");
+    CHECK(nvn_slot[slot].fn == (void *)h_nvnMemoryPoolMapVirtual ||
+          (nvn_slot[slot].fn == (void *)nvn_big_entry && nvn_big_real[slot] == (void *)h_nvnMemoryPoolMapVirtual),
+          "resolver selects the audited fresh-buffer adapter on its host stack");
     uint8_t *memory = mmap(NULL, 2 * PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     REQUIRE(memory != MAP_FAILED, "synthetic physical backing allocated");
     for (unsigned i = 0; i < 2 * PAGE; ++i) memory[i] = (uint8_t)(17 + i * 29 + (i >> 8));
@@ -117,6 +119,6 @@ int main(void) { @autoreleasepool {
     h_nvnMemoryPoolFinalize((NVNmemoryPool *)&physical);
     CHECK(!nvn_dirty_tracked(memory, 2 * PAGE) && !resolves(memory, 4), "physical finalization removes tracking without a GPU allocation");
     REQUIRE(!munmap(memory, 2 * PAGE), "synthetic backing released");
-    printf("t_nvn2_vpool: %u checks, %u failed; reservation/GPU_NO_ACCESS guards only; MapVirtual unadmitted\n", checks, failed);
+    printf("t_nvn2_vpool: %u checks, %u failed; reservation/GPU_NO_ACCESS guards only; no MapVirtual call\n", checks, failed);
     return failed != 0;
 } }

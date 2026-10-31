@@ -81,6 +81,21 @@ at runtime. Title-wide shader selection, reflection, resource bindings and GPU
 draw validation remain open. Computed branches, non-VS/PS
 graphics stages and task/mesh programs are explicitly rejected by this adapter.
 
+## Static resource-binding probe
+
+One production fragment shader was traced through its 201.11 control, native
+texture instructions, locked translation and argument-buffer reflection. Its
+fixed combined 2D texture uses driver bank 2 at byte `0x20`; the inspected API
+packs a 20-bit texture ID and a sampler ID starting at bit 20. The existing
+reflection maps that immediate slot to texture argument 0 and sampler argument
+1. This is a bounded static/offline connection, without Metal compilation or
+GPU execution of the production case.
+
+Texture binding and this shader's resource layout remain guarded. Next verify
+descriptor identity, generation and lifetime in a CPU fixture, followed by a
+tiny synthetic-color readback with independent texture and sampler changes.
+Direct driver reads, C1, SSBO and images are not established by this case.
+
 ## Experimental Metal boundary
 
 A separate private host copy now creates an actual Metal device and queue on
@@ -96,10 +111,14 @@ textures, their swapchain/acquire path, command/control memory and buffers,
 compiler-managed scratch state and GPU-owned render targets. The two real
 primitive programs load matching Metal functions from a stamped diagnostic
 package. Audited vertex and raster-state adapters are connected; initialization
-now reaches the first virtual-pool mapping request. The physical source has
-CPU backing but no GPU address, and the destination reserves 200 MiB of aligned,
-inaccessible virtual memory. Correct mapping, backing lifetime and visibility
-must be proved before admitting the request; a reservation is not an alias.
+now passes the first virtual-pool mapping request. The physical source has
+CPU backing but no direct GPU address. Its 200 MiB destination receives an
+actual OS shared alias and no-copy Metal buffer under the tested backing-lease
+contract. The next request asks for a second virtual view of the same physical
+range with compressible storage class `0x4006`; execution stops explicitly there.
+Duplicate views and virtual textures remain unsupported. The [mapping mechanism
+and synthetic ownership/visibility tests](../reference/nvn-objects.md#nvn2-fresh-buffer-aliases-retain-their-backing)
+do not establish a game-generated GPU submit or image.
 
 An authored fixture independently copied and read back 128 pattern bytes
 through the Metal texture bridge. That is real GPU validation of the resource
@@ -130,6 +149,7 @@ Switch 2 memory isolation is established by this checkpoint.
 - [Guest page-size query during RELRO initialization](../reference/memory.md#guest-page-size-query-during-relro-initialization).
 - [HID applet resources and JCMS setup](../reference/services.md#switch-2-hid-applet-resources-and-jcms-initialization).
 - [Owned transfer and shared memory](../reference/memory.md#owned-transfer-and-shared-memory-handles).
+- [NVN2 fresh buffer alias lifetime](../reference/nvn-objects.md#nvn2-fresh-buffer-aliases-retain-their-backing).
 
 ## Next work
 

@@ -41,3 +41,7 @@ dm/gfx/tests/t_nvn2_abi
 dm/gfx/tests/t_nvn2_abi.dSYM/
 dm/gfx/tests/t_nvn2_vpool
 dm/gfx/tests/t_nvn2_vpool.dSYM/
+dm/gfx/tests/t_nvn2_alias
+dm/gfx/tests/t_nvn2_alias_asan
+dm/gfx/tests/t_nvn2_alias_tsan
+dm/gfx/tests/t_nvn2_alias*.dSYM/

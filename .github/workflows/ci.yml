@@ -53,7 +53,7 @@ jobs:
       - name: NVN2 resource fixtures build and CPU object layouts
         if: runner.os == 'macOS'
         run: |
-          make -C dm/gfx/tests t_nvn2_abi t_nvn2_vpool GAME=0100152000022000
+          make -C dm/gfx/tests t_nvn2_abi t_nvn2_vpool t_nvn2_alias GAME=0100152000022000
           ./dm/gfx/tests/t_nvn2_abi
   studio:
     name: Studio / macOS

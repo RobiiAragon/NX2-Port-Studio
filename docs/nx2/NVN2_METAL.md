@@ -24,11 +24,14 @@ It is not a copied table of console hardware capabilities.
 
 Physical `GPU_NO_ACCESS` pools retain CPU backing and return no GPU address or
 Metal buffer. Virtual pools reserve real, aligned inaccessible VA without a
-Metal buffer for holes. Mapping admission is still being implemented; existing
-NVN 1 mapping shortcuts are not considered valid NVN2 aliases.
+Metal buffer for holes. The initial mapping adapter admits one fresh buffer
+view of a live physical allocation: a real OS shared alias and exact no-copy
+Metal buffer must both succeed before metadata is published. Existing NVN 1
+mapping shortcuts are not used. See [backing lifetime and canonical visibility](../reference/nvn-objects.md#nvn2-fresh-buffer-aliases-retain-their-backing)
+for the admitted policies, ownership and remaining limits.
 
 The separate hardware fixture checks CPU-only physical storage, inaccessible
-virtual reservations, failure cleanup and the guarded mapping resolver. It
+virtual reservations, failure cleanup and the selected mapping resolver. It
 performs no mapping or GPU submission and does not establish alias coherence:
 
 ```sh
@@ -36,11 +39,21 @@ make -C dm/gfx/tests t_nvn2_vpool GAME=0100152000022000
 MTL_DEBUG_LAYER=1 ./dm/gfx/tests/t_nvn2_vpool
 ```
 
-CI compiles this fixture; running it requires an actual supported Apple GPU.
-Before mapping can be admitted, its no-copy buffers must retain backing through
-GPU completion, physical flush ranges must reach their virtual aliases, and
-dirty tracking must follow the shared physical pages. Alias metadata alone
-cannot provide those semantics.
+CI compiles the reservation fixture; running it requires an actual supported
+Apple GPU. A separate authored fixture exercises OS and Metal failures, physical
+CPU writes read through the GPU, GPU writes read through physical CPU storage,
+blocked-GPU destruction and a flush lease that outlives public Finalize:
+
+```sh
+make -C dm/gfx/tests check_t_nvn2_alias GAME=0100152000022000
+make -C dm/gfx/tests nvn2-alias-sanitize GAME=0100152000022000
+make -C dm/gfx/tests nvn2-alias-tsan GAME=0100152000022000
+```
+
+The complete regular/ASan lanes include Metal 4 replay copies. The TSan lease
+lane uses classic Metal transfers and concurrent destruction, excluding an
+inherited replay `seg_ts` lazy-initialization race. Remap, unmap, duplicate
+physical views, other storage classes and all virtual textures remain guarded.
 
 Storage-class queries classify audited allocation geometry and policy, not
 Metal pixel interpretation. A known packed-format layout may have a valid

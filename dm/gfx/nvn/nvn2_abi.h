@@ -24,7 +24,7 @@ static inline int nvn2_common_abi_verified(const char *name) {
         "nvnMemoryPoolBuilderSetStorage", "nvnMemoryPoolBuilderSetFlags",
         "nvnMemoryPoolInitialize", "nvnMemoryPoolFinalize", "nvnMemoryPoolGetFlags",
         "nvnMemoryPoolMap", "nvnMemoryPoolGetSize", "nvnMemoryPoolGetBufferAddress",
-        "nvnMemoryPoolFlushMappedRange",
+        "nvnMemoryPoolFlushMappedRange", "nvnMemoryPoolMapVirtual",
         "nvnSamplerPoolInitialize", "nvnSamplerPoolGetMemoryPool",
         "nvnSamplerPoolGetMemoryOffset", "nvnSamplerPoolGetSize",
         "nvnTexturePoolInitialize", "nvnTexturePoolGetMemoryPool",

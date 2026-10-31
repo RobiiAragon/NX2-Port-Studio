@@ -75,15 +75,17 @@ uint64_t nvn_unimpl_c(nvn_slot_t *slot, uint64_t x0, uint64_t x1, uint64_t x2) {
 }
 
 typedef struct { const char *name; void *fn; } nvn_impl;
+// The Mach-O section is a packed array of records. ASan's per-global redzones
+// must not change its stride; implementation bodies remain fully instrumented.
 #define NVN(name, ret, ...)                                                                       \
     static ret h_##name(__VA_ARGS__);                                                             \
     static const NVNT_##name chk_##name __attribute__((unused)) = h_##name;                       \
-    __attribute__((used, section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
+    __attribute__((used, no_sanitize("address"), section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
     static ret h_##name(__VA_ARGS__)
 // Newer interfaces without prototypes: no signature check
 #define NVN_NOPROTO(name, ret, ...)                                                               \
     static ret h_##name(__VA_ARGS__);                                                             \
-    __attribute__((used, section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
+    __attribute__((used, no_sanitize("address"), section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
     static ret h_##name(__VA_ARGS__)
 
 static int g_log;
@@ -142,6 +144,7 @@ HLE_FORCE("nvnBootstrapLoader", "NVN/NVN2 API interception uses Metal-backed hos
 #define B(x) ((x) & 0xff)
 
 #include "nvn_obj.h"
+#include "nvn2_alias.h"
 
 // ---------- Device ----------
 NVN(nvnDeviceBuilderSetDefaults, void, NVNdeviceBuilder *b) { memset(b, 0, sizeof(dev_builder_t)); }
@@ -251,10 +254,13 @@ static uint8_t *vpool_reserve(const pool_t *o); static void vpool_release(const 
 NVN(nvnMemoryPoolInitialize, NVNboolean, NVNmemoryPool *p, const NVNmemoryPoolBuilder *b) {
     const pool_builder_t *s = (const pool_builder_t *)b; pool_t *o = (pool_t *)p;
 #if DM_GAME_NVN2
+    if (nvn2_pool_identity_registered(o)) {
+        LOG("[RED] NVN2 MemoryPoolInitialize refused: object %p is already registered",(void *)o); return 0;
+    }
     memset(o, 0, sizeof *o);
     if (s->flags&0x200) {
         // A virtual pool reserves address space, never positive physical backing.
-        // MapVirtual remains unadmitted until alias/dirty/lifetime semantics hold.
+        // The fresh buffer-only MapVirtual adapter supplies real aliases later.
         if (s->mem || !s->size || (s->size&65535) || (s->flags&~0x2b1) || !(s->flags&1) ||
             ((s->flags&0x30)!=0x10 && (s->flags&0x30)!=0x20)) {
             LOG("[RED] NVN2 virtual reservation has unsupported flags/storage/alignment flags=%#x size=%#llx",s->flags,(unsigned long long)s->size); return 0;
@@ -287,6 +293,9 @@ NVN(nvnMemoryPoolInitialize, NVNboolean, NVNmemoryPool *p, const NVNmemoryPoolBu
     }
 #if DM_GAME_NVN2
     o->gpu_mem=(o->flags&0x108)?NULL:o->mem;
+    if ((o->flags&0x100) && !nvn2_source_register(o)) {
+        nvn_dirty_remove_range(o->mem); memset(o,0,sizeof *o); return 0;
+    }
 #endif
     if (!o->mem && !(o->flags & 0x200)) LOG("[RED] MemoryPoolInitialize: non-virtual pool has no storage flags=%#x size=%#llx", o->flags, o->size);
     if (getenv("DM_NVN_VLOG")) { LOG("[nvn] MemoryPool %p mem=%p size=%#llx flags=%#x", (void *)p, (void *)o->mem, (unsigned long long)o->size, o->flags); void dm_backtrace(uint64_t fp); dm_backtrace((uint64_t)__builtin_frame_address(0)); }
@@ -294,7 +303,13 @@ NVN(nvnMemoryPoolInitialize, NVNboolean, NVNmemoryPool *p, const NVNmemoryPoolBu
     return 1;
 }
 static void fl_add(const uint8_t *a, uint64_t n); static void fl_drop(const uint8_t *a, uint64_t n);   // flushed ranges, see nvn_flushed
-NVN(nvnMemoryPoolFinalize, void, NVNmemoryPool *p) { if (((pool_t *)p)->flags & 0x200) vpool_release((pool_t *)p);
+NVN(nvnMemoryPoolFinalize, void, NVNmemoryPool *p) {
+#if DM_GAME_NVN2
+    pool_t *pool=(pool_t *)p;
+    if ((pool->flags&0x100) && pool->size && nvn2_source_close(pool,1)!=NVN2_ALIAS_OK)
+        die("[RED] NVN2 physical pool Finalize refused: live alias/CPU lease or stale generation");
+#endif
+    if (((pool_t *)p)->flags & 0x200) vpool_release((pool_t *)p);
     if (((pool_t *)p)->mem && !(((pool_t *)p)->flags & 0x200)) {   // A virtual pool's storage is borrowed from a physical pool; do not unregister it
  nvn_dirty_remove_range(((pool_t *)p)->mem);
 #if DM_GAME_NVN2
@@ -309,6 +324,10 @@ NVN(nvnMemoryPoolFlushMappedRange, void, const NVNmemoryPool *p, ptrdiff_t off, 
 #if DM_GAME_NVN2
     if (o->magic!=MAGIC('P','O','O','L') || off<0 || (uint64_t)off>o->size || n>o->size-(uint64_t)off)
         die("[RED] NVN2 memory pool flush range exceeds its initialized storage");
+    if (o->flags&0x300) {
+        if (!nvn2_pool_flush(o,(uint64_t)off,n)) die("[RED] NVN2 pool flush requires a live canonical physical range");
+        return;
+    }
 #endif
     if (!o->mem) return;
 #if DM_GAME_NVN2
@@ -536,6 +555,10 @@ static void fl_drop(const uint8_t *a, uint64_t n) {   // a pool goes: its part o
     pthread_mutex_unlock(&g_fl_mu);
 }
 int nvn_flushed(const void *p, uint64_t n) {   // whether the CPU flushed any of [p, p + n)
+#if DM_GAME_NVN2
+    int handled=0, answer=nvn2_alias_flushed((uintptr_t)p,n,&handled);
+    if (handled) return answer;
+#endif
     const uint8_t *a = p;
     pthread_mutex_lock(&g_fl_mu);
     size_t i = fl_find(a, 0); int r = i < g_nfl && g_fl[i].lo < a + n;
@@ -2231,6 +2254,9 @@ NVN(nvnCommandBufferSetDebugLabel, void, NVNcommandBuffer *c, const char *s) { (
 //   Inconsistent mappings (true sparse) are not implemented: reported red, returns failure. It used to always fail: the game treated the pool as unusable, a buffer later carved from it got a null pool, and MemoryPoolGetFlags read NULL+4 and crashed
 typedef struct { NVNmemoryPool *phys; int64_t poff, voff; uint64_t size; int32_t storage_class, _pad; } map_req;
 _Static_assert(sizeof(map_req) == 0x28, "NVNmappingRequest");
+#if DM_GAME_NVN2
+static enum nvn2_alias_result nvn2_alias_fresh(pool_t *pool,int count,const map_req *request);
+#endif
 // True sparse virtual pools (Monster Hunter Rise: RE Engine's GPU heap is one 64 GB virtual pool, built from separately allocated 4 MB physical pools mapped at offsets of their own; boot maps 45 of them
 // over the first 180 MB). A virtual pool larger than the whole application pool cannot be one alias of a physical pool, so at Initialize it gets an address range of its own (reserved, inaccessible),
 // and every mapping request vm_remaps the physical pool's pages over its part of that range: the virtual addresses then read and write the same memory as the physical pool, as the GPU page table does
@@ -2243,7 +2269,11 @@ _Static_assert(sizeof(map_req) == 0x28, "NVNmappingRequest");
 // its sparse textures (flag 0x20, 32 GB into the pool) that way: it writes the tiles on the CPU into 4 MB physical pools, then maps them; no GPU copy writes them
 enum { NVPOOL = 4, NVRUN = 1024, VPT_LEAF = 512 };   // a page-table leaf covers 2 MB
 typedef struct { const uint8_t *phys; uint64_t gen; } vpte;
-static struct vpool { const pool_t *pool; uint8_t *base; uint64_t len, size, top; int nrun; struct { uint64_t lo, hi; } run[NVRUN]; vpte **pt; } g_vp[NVPOOL];   // len: reserved; size: the pool's; top: highest mapped end so far (logged per 128 MB)
+static struct vpool { const pool_t *pool; uint8_t *base; uint64_t len, size, top; int nrun; struct { uint64_t lo, hi; } run[NVRUN]; vpte **pt;
+#if DM_GAME_NVN2
+    nvn2_alias_lease *n2;
+#endif
+} g_vp[NVPOOL];   // len: reserved; size: the pool's; top: highest mapped end so far (logged per 128 MB)
 static pthread_mutex_t g_vp_mu = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic uint64_t g_vp_gen;   // bumped per mapping request
 static struct vpool *vpool_of(const pool_t *o) { for (int i = 0; i < NVPOOL; i++) if (g_vp[i].pool == o && g_vp[i].base) return &g_vp[i]; return NULL; }
@@ -2277,7 +2307,7 @@ static uint8_t *vpool_reserve(const pool_t *o) {   // → the reserved range, or
     if (!(g_vp[i].pt = calloc((o->size + (2u << 20) - 1) >> 21, sizeof *g_vp[i].pt))) die("sparse pool page table allocation failed");
     pthread_mutex_unlock(&g_vp_mu);
 #if DM_GAME_NVN2
-    LOG("[nvn] virtual pool %p (%#llx bytes, flags %#x): reserved inaccessible address range %p+%#llx; mapping remains gated",
+    LOG("[nvn] virtual pool %p (%#llx bytes, flags %#x): reserved inaccessible address range %p+%#llx; no mapped pages",
         (const void *)o,(unsigned long long)o->size,o->flags,a,(unsigned long long)len);
 #else
     LOG("[nvn] virtual pool %p (%#llx bytes, flags %#x): sparse, own address range %p+%#llx, physical pages are remapped into it", (const void *)o, (unsigned long long)o->size, o->flags, a, (unsigned long long)len);
@@ -2285,6 +2315,9 @@ static uint8_t *vpool_reserve(const pool_t *o) {   // → the reserved range, or
     return a;
 }
 static void vpool_release(const pool_t *o) {
+#if DM_GAME_NVN2
+    nvn2_virtual_close(o); return;
+#endif
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_of(o);
     if (v) { for (int k = 0; k < v->nrun; k++) mtl_pool_del(v->base + v->run[k].lo); munmap(v->base, v->len);
         for (uint64_t l = 0; l < (v->size + (2u << 20) - 1) >> 21; l++) free(v->pt[l]);
@@ -2348,6 +2381,23 @@ static int vpool_map(struct vpool *v, const map_req *r) {   // caller holds g_vp
     return 1;
 }
 NVN(nvnMemoryPoolMapVirtual, NVNboolean, NVNmemoryPool *p, int n, const NVNmappingRequest *rq) {
+#if DM_GAME_NVN2
+    if (n!=1) die("[RED] NVN2 MapVirtual contract unsupported: exactly one mapping request required (count=%d)",n);
+    if (nvn2_readable_extent(rq)<sizeof(map_req)) {
+        LOG("[RED] NVN2 MapVirtual mapping request is not readable"); return 0;
+    }
+    map_req request; memcpy(&request,rq,sizeof request);
+    enum nvn2_alias_result result=nvn2_alias_fresh((pool_t *)p,n,&request);
+    if (result==NVN2_ALIAS_UNSUPPORTED)
+        die("[RED] NVN2 MapVirtual contract unsupported: physical=%p physicalOffset=%#llx virtual=%p virtualOffset=%#llx size=%#llx class=%#x: %s",
+            (void *)request.phys,(unsigned long long)request.poff,(void *)p,(unsigned long long)request.voff,
+            (unsigned long long)request.size,(unsigned)request.storage_class,nvn2_alias_error(result));
+    if (result!=NVN2_ALIAS_OK) LOG("[RED] NVN2 MapVirtual refused: %s",nvn2_alias_error(result));
+    else LOG("[nvn] NVN2 fresh buffer alias %p + %#llx -> %p + %#llx, %#llx bytes class=%#x: OS + Metal view live",
+        (void *)request.phys,(unsigned long long)request.poff,(void *)p,(unsigned long long)request.voff,
+        (unsigned long long)request.size,(unsigned)request.storage_class);
+    return result==NVN2_ALIAS_OK;
+#else
     pool_t *o = (pool_t *)p; const map_req *r = (const map_req *)rq;
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_of(o); int ok = 1;
     for (int i = 0; v && i < n && ok; i++) ok = vpool_map(v, &r[i]);
@@ -2364,6 +2414,7 @@ NVN(nvnMemoryPoolMapVirtual, NVNboolean, NVNmemoryPool *p, int n, const NVNmappi
         o->mem = base;
     }
     return 1;
+#endif
 }
 
 // Samplers: the getters read the parameters in the object. Reduction (min / max of the texels a filtered sample covers) maps to the Metal 26 sampler reduction mode (nvn_mtl.m samp_by_id)
@@ -2597,6 +2648,8 @@ NVN(nvnCommandBufferBindVertexBuffer, void, NVNcommandBuffer *c, int i, NVNbuffe
 // Draws
 NVN(nvnCommandBufferDrawElements, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, NVNindexType it, int n, NVNbufferAddress ib) { h_nvnCommandBufferDrawElementsInstanced(c, pr, it, n, ib, 0, 0, 1); }
 NVN(nvnCommandBufferDrawElementsBaseVertex, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, NVNindexType it, int n, NVNbufferAddress ib, int bv) { h_nvnCommandBufferDrawElementsInstanced(c, pr, it, n, ib, bv, 0, 1); }
+#include "nvn2_alias.inc"
+
 NVN(nvnCommandBufferDrawArraysInstanced, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, int first, int n, int bi, int inst) {
     rec_draw(c, (p_draw){pr, first, n, inst, bi});
 }
@@ -2615,10 +2668,17 @@ NVN(nvnCommandBufferMultiDrawArraysIndirectCount, void, NVNcommandBuffer *c, NVN
 }
 // Whether the host can read n bytes at a guest address: outside a sparse virtual pool always; inside one only where pages are mapped (nvn_mtl.m reads multi-draw counts there)
 int nvn_host_readable(uint64_t a, uint64_t n) {
+    if (n>UINT64_MAX-a) return 0;
     int ok = 1; pthread_mutex_lock(&g_vp_mu);
-    for (int k = 0; k < NVPOOL; k++) { struct vpool *v = &g_vp[k]; if (!v->base || a < (uint64_t)(uintptr_t)v->base || a >= (uint64_t)(uintptr_t)v->base + v->len) continue;
+    for (int k = 0; k < NVPOOL; k++) { struct vpool *v = &g_vp[k];
+#if DM_GAME_NVN2
+        if (!v->base || a+n<=(uintptr_t)v->base || a>=(uintptr_t)v->base+v->len) continue;
+        if (a<(uintptr_t)v->base) { ok=0; break; }
+#else
+        if (!v->base || a < (uint64_t)(uintptr_t)v->base || a >= (uint64_t)(uintptr_t)v->base + v->len) continue;
+#endif
         uint64_t o = a - (uint64_t)(uintptr_t)v->base; ok = 0;
-        for (int r = 0; r < v->nrun; r++) if (o >= v->run[r].lo && o + n <= v->run[r].hi) { ok = 1; break; }
+        for (int r = 0; r < v->nrun; r++) if (o >= v->run[r].lo && o <= v->run[r].hi && n <= v->run[r].hi-o) { ok = 1; break; }
         break; }
     pthread_mutex_unlock(&g_vp_mu); return ok;
 }
@@ -2642,6 +2702,12 @@ static struct vpool *vpool_at(const void *pool, uint64_t a) {
 int nvn_sparse_pool(const void *pool) { int r = 0; for (int k = 0; k < NVPOOL; k++) r |= g_vp[k].base && g_vp[k].pool == pool; return r; }   // no lock: a slot is set once at Initialize, cleared at Finalize; called per texture lookup
 uint64_t nvn_sparse_gen(void) { return atomic_load(&g_vp_gen); }
 uint64_t nvn_sparse_copy(const void *pool, void *dst, uint64_t a, uint64_t n) {
+#if DM_GAME_NVN2
+    nvn2_alias_lease *lease=NULL; const uint8_t *physical=NULL;
+    if (nvn2_alias_acquire(a,n,&lease,&physical)!=NVN2_ALIAS_OK) return n;
+    if (lease->virtual_pool!=pool) { nvn2_alias_release(lease); return n; }
+    memcpy(dst,physical,n); nvn2_alias_release(lease); return 0;
+#endif
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_at(pool, a); uint64_t miss = 0;
     if (!v) { pthread_mutex_unlock(&g_vp_mu); memset(dst, 0, n); return n; }
     for (uint64_t p = 0, o = a - (uint64_t)(uintptr_t)v->base; p < n;) {
@@ -2671,13 +2737,33 @@ static int vpt_walk(const void *pool, uint64_t a, uint64_t n, uint64_t gen, int 
 }
 static int run_written(const uint8_t *p, uint64_t n, uint64_t stamp) { return nvn_dirty_since(p, n, stamp); }
 static int run_protect(const uint8_t *p, uint64_t n, uint64_t unused) { (void)unused; nvn_dirty_protect(p, n); return 0; }
-int nvn_sparse_since(const void *pool, uint64_t a, uint64_t n, uint64_t gen, uint64_t stamp) { return vpt_walk(pool, a, n, gen, run_written, stamp); }
+int nvn_sparse_since(const void *pool, uint64_t a, uint64_t n, uint64_t gen, uint64_t stamp) {
+#if DM_GAME_NVN2
+    (void)pool; (void)gen; return nvn2_alias_since(a,n,stamp);
+#else
+    return vpt_walk(pool, a, n, gen, run_written, stamp);
+#endif
+}
 int nvn_sparse_mapped(const void *pool, uint64_t a, uint64_t n) {   // every page of [a, a+n) has memory behind it
+#if DM_GAME_NVN2
+    nvn2_alias_lease *lease=NULL; const uint8_t *physical=NULL;
+    int result=nvn2_alias_acquire(a,n,&lease,&physical)==NVN2_ALIAS_OK;
+    if (result && lease->virtual_pool!=pool) result=0;
+    nvn2_alias_release(lease); return result;
+#endif
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_at(pool, a); int ok = v != NULL;
     for (uint64_t o = v ? (a - (uint64_t)(uintptr_t)v->base) & ~0xFFFull : 0, end = v ? a - (uint64_t)(uintptr_t)v->base + n : 0; ok && o < end; o += 0x1000) { const vpte *e = o < v->size ? vpt_get(v, o) : NULL; ok = e && e->phys; }
     pthread_mutex_unlock(&g_vp_mu); return ok;
 }
-void nvn_sparse_protect(const void *pool, uint64_t a, uint64_t n) { vpt_walk(pool, a, n, ~0ull, run_protect, 0); }
+void nvn_sparse_protect(const void *pool, uint64_t a, uint64_t n) {
+#if DM_GAME_NVN2
+    nvn2_alias_lease *lease=NULL; const uint8_t *physical=NULL;
+    if (nvn2_alias_acquire(a,n,&lease,&physical)==NVN2_ALIAS_OK && lease->virtual_pool==pool) nvn_dirty_protect(physical,n);
+    nvn2_alias_release(lease);
+#else
+    vpt_walk(pool, a, n, ~0ull, run_protect, 0);
+#endif
+}
 NVN(nvnCommandBufferDrawElementsIndirect, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, NVNindexType it, NVNbufferAddress ib, NVNbufferAddress ind) {
     rec_draw_idx(c, (p_draw_idx){pr, it, 0, 0, 0, 1, ib, ind});
 }

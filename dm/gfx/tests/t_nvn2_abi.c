@@ -446,7 +446,7 @@ int main(int argc, char **argv) {
     assert(!nvn2_readable_extent((void *)virtual_address) && !nvn_host_readable(virtual_address,4));
     void *unmapped_metal=NULL; uint64_t unmapped_offset=0;
     assert(!mtl_addr(virtual_address,4,&unmapped_metal,&unmapped_offset));
-    assert(!nvn2_common_abi_verified("nvnMemoryPoolMapVirtual"));
+    assert(nvn2_common_abi_verified("nvnMemoryPoolMapVirtual"));
     h_nvnMemoryPoolFinalize((NVNmemoryPool *)&virtual_pool);
     assert(!vpool_of(&virtual_pool));
     virtual_builder.size=65537;

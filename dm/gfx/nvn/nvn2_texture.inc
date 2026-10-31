@@ -152,8 +152,8 @@ T2_FN(nvnTextureInitialize, NVNboolean, NVNtexture *t, const NVNtextureBuilder *
     if (!decoded.pool || decoded.pool->magic != MAGIC('P','O','O','L') || !decoded.pool->gpu_mem || decoded.off < 0 ||
         (uint64_t)decoded.off > decoded.pool->size || l.size > decoded.pool->size - (uint64_t)decoded.off)
         die("[RED] NVN2 texture storage is outside its initialized pool");
-    if ((decoded.pool->flags&0x200) && !nvn_host_readable((uintptr_t)decoded.pool->gpu_mem+(uint64_t)decoded.off,l.size))
-        die("[RED] NVN2 texture initialization requires a fully mapped virtual range");
+    if (decoded.pool->flags&0x200)
+        die("[RED] NVN2 virtual textures require independent GPU image alias/coherence validation");
     if ((decoded.d.flags&8) && ((decoded.pool->flags&0x81)!=0x81))
         die("[RED] NVN2 compressible texture requires GPU-only compressible storage");
     // Native TextureInitialize writes exactly 0x80 bytes. The same-size host record

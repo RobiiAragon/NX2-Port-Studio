@@ -122,7 +122,7 @@ runtime bindings and rendering validation remain open. See
 | Workspace | Private output, preserved inputs, recorded builds/platform, refused overwrite | No game executable |
 | CPU diagnostic | Bananza base/update reached `nnMain` in a private headless inherited host | Deliberate stop at graphics bootstrap; inherited service/memory assumptions |
 | Ampere tool | 4,543 accepted graphics intermediates from 4,609 BNSH identities; corrected primitive programs compiled to Metal | No title-wide Metal or game-draw validation; unsupported cases fail |
-| Experimental NVN2 | Base Bananza initializes Metal resources, real HID setup and two native graphics programs; authored GPU copy/readback passes | Virtual-memory and draw integration remain incomplete; no game image or export |
+| Experimental NVN2 | Base Bananza initializes Metal resources, real HID setup, two native graphics programs and its first buffer alias; authored GPU copy/readback passes | Second virtual views, virtual images and drawing remain incomplete; no game image or export |
 | macOS front end | Swift build and shared CLI integration | No Switch 2 game boot |
 | iPhone | Intended target recorded | No IPA, device boot or gameplay tested |
 

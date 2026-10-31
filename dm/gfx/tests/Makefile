@@ -37,6 +37,20 @@ t_nvn2_abi: t_nvn2_abi.c ../nvn/hle_nvn.c ../../host/crash.c ../../host/hle_bigs
 	clang $(CFLAGS) -DDM_GAME_NVN2=1 -fobjc-arc -o $@ t_nvn2_abi.c ../../host/crash.c ../../host/hle_bigstack.c $(GFX) $(FW)
 t_nvn2_vpool: t_nvn2_vpool.m $(MTL_T_DEP)
 	clang $(CFLAGS) -DDM_GAME_NVN2=1 -fobjc-arc -o $@ t_nvn2_vpool.m ../../host/crash.c ../../host/hle_bigstack.c t_host_stubs.c $(filter-out ../nvn/nvn_mtl.m,$(GFX)) $(FW)
+t_nvn2_alias: t_nvn2_alias.m $(MTL_T_DEP)
+	clang $(CFLAGS) -DDM_GAME_NVN2=1 -fobjc-arc -o $@ t_nvn2_alias.m ../../host/crash.c ../../host/hle_bigstack.c t_host_stubs.c $(filter-out ../nvn/nvn_mtl.m,$(GFX)) $(FW)
+t_nvn2_alias_asan: t_nvn2_alias.m $(MTL_T_DEP)
+	clang $(CFLAGS) -DDM_GAME_NVN2=1 -fobjc-arc -fsanitize=address,undefined -fno-omit-frame-pointer -o $@ t_nvn2_alias.m ../../host/crash.c ../../host/hle_bigstack.c t_host_stubs.c $(filter-out ../nvn/nvn_mtl.m,$(GFX)) $(FW)
+t_nvn2_alias_tsan: t_nvn2_alias.m $(MTL_T_DEP)
+	clang $(CFLAGS) -DDM_GAME_NVN2=1 -fobjc-arc -fsanitize=thread -o $@ t_nvn2_alias.m ../../host/crash.c ../../host/hle_bigstack.c t_host_stubs.c $(filter-out ../nvn/nvn_mtl.m,$(GFX)) $(FW)
+.PHONY: check_t_nvn2_alias nvn2-alias-sanitize nvn2-alias-tsan
+check_t_nvn2_alias: t_nvn2_alias
+	python3 -c "import signal,subprocess; p=subprocess.run(['./t_nvn2_alias','--unsupported-count'],capture_output=True); assert p.returncode == -signal.SIGABRT and b'exactly one mapping request' in p.stderr, p.stderr; print('Unsupported mapping count aborts before Metal initialization')"
+	MTL_DEBUG_LAYER=1 ./t_nvn2_alias
+nvn2-alias-sanitize: t_nvn2_alias_asan
+	ASAN_OPTIONS=detect_leaks=0 MTL_DEBUG_LAYER=1 ./t_nvn2_alias_asan
+nvn2-alias-tsan: t_nvn2_alias_tsan
+	MTL_DEBUG_LAYER=1 ./t_nvn2_alias_tsan --leases-only
 t_dirty_slots: t_dirty_slots.c ../nvn/nvn_dirty.c ../../host/crash.c ../nvn/nvn_dirty.h
 	clang $(CFLAGS) -o $@ t_dirty_slots.c ../../host/crash.c ../nvn/nvn_dirty.c
 t_dirty_race: t_dirty_race.c ../nvn/nvn_dirty.c ../../host/crash.c ../nvn/nvn_dirty.h

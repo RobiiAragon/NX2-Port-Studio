@@ -36,6 +36,16 @@ The game may also write into an NVN object directly, without an NVN call, throug
 
 ## Memory pools
 
+### NVN2 fresh buffer aliases retain their backing
+
+- **Symptom:** native initialization stops at `nvnMemoryPoolMapVirtual`; a virtual reservation alone has no readable pages or Metal buffer.
+- **Cause:** the inherited sparse path can publish page-table entries before OS mapping succeeds and has no source generation/pin ownership. Removing a registry entry or draining the GPU also does not prove that a no-copy Metal buffer has released its bytes.
+- **Fix:** the NVN2 adapter admits exactly one fresh, nonempty, 64 KiB-aligned request into an empty `0x2a1` virtual pool from a live `0x18c` physical pool. Only the default buffer class `0x100` and host plain byte-storage class `0x4004` are admitted. `vm_remap` shares the real physical pages; an exact no-copy Metal buffer owns a refcounted reservation/source lease. Publication follows both operations. A failed Metal allocation restores inaccessible pages without changing the mapping generation or registries. Source Finalize refuses live pins or stale identity. Virtual Finalize closes CPU acquisition, drains submitted GPU work, retires residency and lookup state, then drops its lease. Actual buffer deallocation and outstanding CPU borrowers determine when VA is unmapped and the physical pin released; a later submit is unnecessary.
+- **Visibility:** flush records use physical addresses only. Alias queries translate their exact intersection under a lease, so flushes before mapping are visible and a borrowed flush completing after Finalize cannot republish a stale VA span. CPU dirty tracking stays on physical pages. Writable GPU aliases conservatively report dirty because GPU/host alias writes do not fault the physical CPU mapping. This makes no claim of exact GPU dirty generations or image-cache coherence.
+- **Limits:** one physical GPU view at a time, including retired-but-retained buffers. Arrays, remap, unmap, duplicate views, other storage classes and virtual texture creation remain explicit unsupported cases. The allocator's backing must stay alive until physical Finalize succeeds. This is buffer alias support, not general sparse-image or compression-tag emulation.
+- **Found on:** [Donkey Kong Bananza](../nx2/DONKEY_KONG_BANANZA.md), base native diagnostic on Apple M5 Max/macOS; its first 200 MiB plain mapping succeeds. The next request for a second view with compressible class `0x4006` stops deliberately. No game GPU submit or image is established.
+- **Check:** `make -C dm/gfx/tests check_t_nvn2_alias nvn2-alias-sanitize nvn2-alias-tsan GAME=<id>`. The authored fixture uses offset mappings with inaccessible neighbours, actual Metal reads/writes, failure rollback, blocked-GPU Finalize and CPU/Metal references surviving registry teardown. ASan excludes padding only on packed Mach-O registration records; code remains instrumented. The dedicated TSan lease lane excludes an inherited Metal 4 replay lazy-initialization race; full regular/ASan lanes exercise that replay.
+
 ### Heaps cut from a pool at alignment relative to its GPU address
 
 - **Symptom:** a null write as soon as the main thread starts recording a command buffer (13 Sentinels: a constructor at `main+0x2fa9a0` runs on `this = 0` when the prologue enters its first battle).

@@ -515,6 +515,54 @@ void mtl_pool_del(const void *mem) {
     pthread_mutex_unlock(&g_mu);
 }
 
+// A no-copy buffer must own the VA lease, not merely borrow a caller's pointer.
+// Capturing this holder also handles a refused Metal allocation: ARC releases
+// the holder on that path, consuming exactly the supplied owner reference.
+@interface NvPoolOwner : NSObject { @public void *owner; void (*releaseOwner)(void *); }
+- (void)releaseBacking;
+@end
+@implementation NvPoolOwner
+- (void)releaseBacking { if (releaseOwner) { void (*release)(void *)=releaseOwner; releaseOwner=NULL; release(owner); } }
+- (void)dealloc { [self releaseBacking]; }
+@end
+int mtl_pool_add_owned(const void *mem, uint64_t size, void *owner, void (*release)(void *)) { @autoreleasepool {
+    NvPoolOwner *holder=[NvPoolOwner new]; holder->owner=owner; holder->releaseOwner=release;
+    uintptr_t pg=(uintptr_t)getpagesize(), lo=(uintptr_t)mem;
+    if (!mem || !size || size>UINTPTR_MAX-lo || ((lo|size)&(pg-1))) return 0;
+    mtl_init();
+    id<MTLBuffer> buffer=[g_dev newBufferWithBytesNoCopy:(void *)mem length:size options:MTLResourceStorageModeShared
+        deallocator:^(void *pointer, NSUInteger length) { (void)pointer; (void)length; [holder releaseBacking]; }];
+    if (!buffer) return 0;
+    pthread_mutex_lock(&g_mu);
+    for (int i=0;i<g_npool;++i) if (lo<g_pools[i].hi && g_pools[i].lo<lo+size) {
+        pthread_mutex_unlock(&g_mu); return 0;
+    }
+    if (g_npool==g_cap) {
+        int capacity=g_cap?g_cap*2:64;
+        pool_ent *next=realloc(g_pools,(size_t)capacity*sizeof *g_pools);
+        if (!next) { pthread_mutex_unlock(&g_mu); return 0; }
+        g_pools=next; g_cap=capacity;
+    }
+    g_pools[g_npool++]=(pool_ent){lo,lo+size,lo,buffer,buffer.gpuAddress,mem,0};
+    [g_keep addObject:buffer]; g_pool_adds++; g_reg_gen++;
+    g_pidx_ok=0; g_plast=-1; atomic_fetch_add_explicit(&g_pool_gen,1,memory_order_release);
+    pthread_mutex_unlock(&g_mu); return 1;
+} }
+void mtl_pool_del_owned(const void *mem) { @autoreleasepool {
+    // Finalize may block, but may never free pages before GPU completion. Unlike
+    // the inherited deferred fence+1 policy this also retires without a next submit.
+    mtl_drain();
+    pthread_mutex_lock(&g_mu);
+    for (int i=0;i<g_npool;++i) if (g_pools[i].key==mem) {
+        id<MTLBuffer> buffer=g_pools[i].buf;
+        if (g_pools[i].res) { res_remove(buffer); g_pool_res_n--; }
+        [g_keep removeObject:buffer];
+        g_pools[i]=g_pools[--g_npool]; g_pidx_ok=0; g_plast=-1; g_reg_gen++;
+        atomic_fetch_add_explicit(&g_pool_gen,1,memory_order_release); break;
+    }
+    pthread_mutex_unlock(&g_mu); res_commit();
+} }
+
 // Address → pool: the last hit first, then a binary search over indices sorted by start address, and a full linear scan only when that fails (pools overlapping).
 // The Legend of Zelda: Breath of the Wild keeps about 1760 memory pools alive and every buffer binding of every draw looks one up; the old full scan took about 4% of the submit thread's samples (mtl_gpu_addr 222 / 6 s). Adding / removing pools invalidates the index, which is re-sorted when next used. Caller holds g_mu
 static int *g_pidx; static int g_pidx_cap;
@@ -533,6 +581,7 @@ static int pool_find(uint64_t addr, uint64_t len) {
     return -1;
 }
 int mtl_addr(uint64_t addr, uint64_t len, void **buf, uint64_t *off) {
+    if (len>UINT64_MAX-addr) return 0;
     const pc_ent *c = pc_get(addr, len);
     if (c) { *buf = (__bridge void *)c->buf; *off = addr - c->base; return 1; }
     int ok = 0;
@@ -543,6 +592,7 @@ int mtl_addr(uint64_t addr, uint64_t len, void **buf, uint64_t *off) {
     return ok;
 }
 int mtl_gpu_addr(uint64_t addr, uint64_t len, void **buf, uint64_t *off, uint64_t *gpu) {
+    if (len>UINT64_MAX-addr) return 0;
     const pc_ent *c = pc_get(addr, len);
     if (c) { *buf = (__bridge void *)c->buf; *off = addr - c->base; *gpu = c->gpu + *off; return 1; }
     int ok = 0;
