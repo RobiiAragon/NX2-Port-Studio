@@ -67,4 +67,57 @@ final class NX2ModelTests: XCTestCase {
         XCTAssertNil(saved.string(forKey: "nx2ResourcesPath"))
         XCTAssertEqual(saved.string(forKey: "keysPath"), "/unrelated-studio-keys")
     }
+
+    private var nativeInput: String {
+        valid.replacingOccurrences(of: "\"runtime_ready\":false", with:
+            "\"runtime_ready\":false,\"native_export\":{\"available\":true,\"name\":\"Synthetic game\",\"commit\":\"synthetic\"}")
+    }
+
+    func testNativeExportRequiresVerifiedReceiptRatherThanExitStatusAlone() async throws {
+        let model = NX2Model(preferences: preferences(), executor: { command in
+            XCTAssertTrue(command.arguments.contains("export"))
+            XCTAssertTrue(command.arguments.contains("--engine"))
+            XCTAssertFalse(command.arguments.contains("-k"))
+            return ProcessResult(exitCode: 0, output: "{\"stage\":\"progress\"}")
+        })
+        model.gameURL = URL(fileURLWithPath: "/synthetic-input")
+        model.inspection = try JSONDecoder().decode(NX2Inspection.self, from: Data(nativeInput.utf8))
+        model.nativeEngineReady = true
+        model.exportMac(to: URL(fileURLWithPath: "/synthetic.app"))
+        await model.waitForCurrentOperation()
+        XCTAssertNil(model.exportedAppURL)
+        XCTAssertTrue(model.failure?.contains("receipt") == true)
+    }
+
+    func testNativeExportSelectsTheFinalVerifiedArtifactAfterProgress() async throws {
+        let model = NX2Model(preferences: preferences(), executor: { _ in
+            ProcessResult(exitCode: 0, output: """
+            {"ev":"progress","name":"Mac shaders","frac":0.8}
+            {"stage":"native-exported","artifact":"/synthetic.app","signature_verified":true}
+            """)
+        })
+        model.gameURL = URL(fileURLWithPath: "/synthetic-input")
+        model.inspection = try JSONDecoder().decode(NX2Inspection.self, from: Data(nativeInput.utf8))
+        model.nativeEngineReady = true
+        model.exportMac(to: URL(fileURLWithPath: "/synthetic.app"))
+        await model.waitForCurrentOperation()
+        XCTAssertEqual(model.exportedAppURL?.path, "/synthetic.app")
+        XCTAssertTrue(model.status.contains("gameplay needs testing"))
+    }
+
+    func testCancelledExportCannotPublishLateReceipt() async throws {
+        let model = NX2Model(preferences: preferences(), executor: { _ in
+            try? await Task.sleep(for: .milliseconds(20))
+            return ProcessResult(exitCode: 0, output: "{\"stage\":\"native-exported\",\"artifact\":\"/synthetic.app\",\"signature_verified\":true}")
+        })
+        model.gameURL = URL(fileURLWithPath: "/synthetic-input")
+        model.inspection = try JSONDecoder().decode(NX2Inspection.self, from: Data(nativeInput.utf8))
+        model.nativeEngineReady = true
+        model.exportMac(to: URL(fileURLWithPath: "/synthetic.app"))
+        await Task.yield()
+        model.cancel()
+        await model.waitForCurrentOperation()
+        XCTAssertNil(model.exportedAppURL)
+        XCTAssertEqual(model.status, "Cancelled")
+    }
 }

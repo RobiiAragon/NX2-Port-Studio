@@ -37,15 +37,36 @@ def main(argv=None) -> int:
     resource.add_argument("--source-platform", choices=("switch1", "switch2"))
     resource.add_argument("--output", type=Path, help="New private resource library, for import")
     resource.add_argument("--json", action="store_true")
+    native = commands.add_parser("native", help="Prepare the pinned engine or export an exact profiled Switch 2 Mac app")
+    native.add_argument("action", choices=("prepare", "status", "inspect", "export"))
+    native.add_argument("path", type=Path, help="Engine destination for prepare/status; game root for inspect/export")
+    native.add_argument("--engine", type=Path, help="Prepared, reviewed engine checkout for export")
+    native.add_argument("--output", type=Path, help="New .app destination outside the dump and engine")
+    native.add_argument("--language", default="es")
+    native.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.command == "inspect":
             result = inspect_dump(args.dump, census=args.cpu_census, symbols=args.symbols)
+            from nx2.native_runtime import annotate_inspection
+            result = annotate_inspection(result)
         elif args.command == "prepare":
             result = prepare(args.dump, args.output, platform=args.platform, census=args.cpu_census,
                              symbols=args.symbols, resources=args.resources)
         elif args.command == "verify":
             result = verify_workspace(args.workspace)
+        elif args.command == "native":
+            from nx2.native_runtime import prepare_engine, verify_engine, inspect_native_dump, export_mac
+            if args.action == "prepare":
+                result = prepare_engine(args.path)
+            elif args.action == "status":
+                result = verify_engine(args.path)
+            elif args.action == "inspect":
+                result = inspect_native_dump(args.path)
+            else:
+                if args.engine is None or args.output is None:
+                    raise DumpError("Native export requires --engine and --output")
+                result = export_mac(args.path, args.engine, args.output, language=args.language)
         else:
             from nx2.resources import inspect_catalog, import_catalog, inspect_registered
             if args.action == "import" and args.output is None:

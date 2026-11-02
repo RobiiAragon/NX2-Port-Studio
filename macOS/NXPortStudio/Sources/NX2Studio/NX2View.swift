@@ -69,6 +69,35 @@ struct NX2View: View {
                             }
                         } header: { Text(nx2t("Validated modules")) }
                         Section {
+                            if report.native_export?.available == true {
+                                Text(nx2t("An exact native Mac profile is available for this update. iPhone export remains untested and unavailable."))
+                                Picker(nx2t("Game language"), selection: $model.gameLanguage) {
+                                    Text("Español").tag("es")
+                                    Text("English").tag("en")
+                                    Text("Français").tag("fr")
+                                    Text("日本語").tag("ja")
+                                    Text("简体中文").tag("zh-Hans")
+                                }.disabled(model.isBusy)
+                                HStack {
+                                    Button(nx2t("Prepare Mac export tools…")) { model.prepareNativeEngine() }
+                                    Button(nx2t("Create Mac app…")) { model.chooseMacExport() }
+                                        .buttonStyle(.borderedProminent)
+                                        .disabled(!model.nativeEngineReady)
+                                }.disabled(model.isBusy)
+                                Text(nx2t("The first export can take an hour. Temporary game and shader builds are removed when it finishes."))
+                                    .font(.callout).foregroundStyle(.secondary)
+                                if let progress = model.exportProgress, model.isBusy {
+                                    ProgressView(value: progress).accessibilityLabel(nx2t("Native export progress"))
+                                }
+                                if let app = model.exportedAppURL {
+                                    Button(nx2t("Show Mac app in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([app]) }
+                                }
+                            } else {
+                                Text(report.native_export?.reason ?? nx2t("This input has no exact native Mac export profile yet."))
+                                    .foregroundStyle(.secondary)
+                            }
+                        } header: { Text(nx2t("Native Mac export")) }
+                        Section {
                             Picker(nx2t("Target platform"), selection: $model.destination) {
                                 Text("Mac · arm64").tag("macOS")
                                 Text("iPhone / iPad · arm64").tag("iOS")
@@ -100,8 +129,8 @@ struct NX2View: View {
                     Section {
                         Label(nx2t("Dump import and validation"), systemImage: "checkmark.circle")
                         Label(nx2t("Standalone Ampere translator · synthetic tests"), systemImage: "wrench.and.screwdriver")
-                        Label(nx2t("Native game execution and NVN2 on Metal · pending"), systemImage: "clock")
-                        Text(nx2t("This version prepares development workspaces. It does not yet export a playable Mac app or iPhone IPA."))
+                        Label(nx2t("Pinned nxnative Mac export · exact profiled builds"), systemImage: "desktopcomputer")
+                        Text(nx2t("The development workspace and experimental backend remain separate. A successful export still needs gameplay testing. No iPhone IPA is produced."))
                             .foregroundStyle(.secondary)
                         Button(nx2t("Prepare validation tools…")) { model.prepareTools() }.disabled(model.isBusy)
                         Text(nx2t("Installs LZ4 in a separate NX2 environment for compressed modules."))

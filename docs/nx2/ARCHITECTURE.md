@@ -10,6 +10,8 @@ does not accept encrypted NSP/XCI packages, request keys, or boot firmware.
 Game execution may still need particular system resources; that has not been
 established for Mario Kart World on this host.
 
+Since 0.3.0, I also provide a separate [pinned upstream Mac export path](NATIVE_EXPORT.md) for exact Bananza/Raiders builds. The inspection and experimental NVN2 architecture below remains a separate development path; its old CPU-only milestones do not limit or qualify the external engine.
+
 ## Current path
 
 `scripts/nx2.py` → `nx2.formats` → `nx2.pipeline` → a private inspection report

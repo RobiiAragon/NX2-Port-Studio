@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/seedds/nxnative.git",
+  "commit": "1ae435d5dbe378a022ec336692a26787557a6cea",
+  "platform": "macOS",
+  "profiles": {
+    "040074A01BF12000": {
+      "name": "Donkey Kong Bananza",
+      "version": 458752,
+      "modules": {
+        "main": "e25c90c1c136638885659fd55bf8a03b3403489d000000000000000000000000",
+        "sdk": "18265daea2105b31f25346adfbbd09b5edf1207f000000000000000000000000"
+      },
+      "upstream_note": "dm/games/040074A01BF12000/README.md"
+    },
+    "0400380020056000": {
+      "name": "Splatoon Raiders",
+      "version": 65536,
+      "modules": {
+        "main": "663c2e087a083f05307f229dfc4042d5bcc906b6000000000000000000000000",
+        "subsdk0": "07e685d1c23a77a389fd205288ae904c34e059a0000000000000000000000000",
+        "sdk": "41d4de4a3b78214ad20c896960df0e5ea0ed595f000000000000000000000000"
+      },
+      "upstream_note": "dm/games/0400380020056000/README.md"
+    }
+  }
+}
