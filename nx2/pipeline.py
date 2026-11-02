@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import __version__
+from .studio_version import __version__
 from .formats import DumpError, MODULE_NAME, read_npdm, read_nso
 from .romfs import inspect_image
 

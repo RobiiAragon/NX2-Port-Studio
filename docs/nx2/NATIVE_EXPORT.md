@@ -6,7 +6,9 @@ CPU, NVN2 and native Ampere/Metal implementation at the reviewed revision
 I prepare that source in a separate private cache rather than overwrite my
 experimental backend or mix two incompatible shader chains. I keep its pin in
 `nx2/native_runtime.json`; the experimental lowerer retains its separate
-`upstreams.lock.json` and shader-chain identity unchanged.
+`upstreams.lock.json` and shader-chain identity unchanged. Studio’s version is
+also separate from that frozen adapter package; changing a UI/export version
+does not rebuild unrelated shader libraries.
 
 ## Exact profiles
 
