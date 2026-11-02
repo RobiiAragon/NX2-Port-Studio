@@ -93,6 +93,10 @@ I completed the full Bananza export with its optional DLC: 23,638 shaders transl
 ## Storage and validation limits
 
 I create one owned temporary workspace under the game's `nx2-work` directory.
+I also give the upstream packer an owned staging folder on the destination
+volume. After verification I rename only the finished app into place and
+remove the packer's sibling inventory and partial products with that folder;
+unrelated files beside the selected destination are preserved.
 On success, failure or handled termination I retire that workspace, leaving
 only a small redacted build log and, on success, its receipt. I never remove
 the dump, a pre-existing output app or another operation's workspace. The
