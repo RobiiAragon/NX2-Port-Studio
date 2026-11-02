@@ -171,12 +171,18 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
     environment = {k: v for k, v in os.environ.items() if not k.startswith("DM_")}
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     title = report["metadata"]["program_id"]
-    command = [sys.executable, str(engine / "scripts/build_ipa_from_nsp.py"), str(root),
-               "--platform", "mac-app", "--out", str(output), "--work-dir", str(scratch),
-               "--bundle-id", f"org.nxnative.{title.lower()}", "--language", language, "--progress", "json"]
     previous_signal = signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))
     process = None
+    staging = None
     try:
+        # Upstream writes app.key inventories and app.partial beside its output.
+        # Own that entire staging folder on the destination volume, so cleanup
+        # can remove those products without touching an existing sibling file.
+        staging = Path(tempfile.mkdtemp(prefix=".nx2-export-", dir=output.parent))
+        artifact = staging / output.name
+        command = [sys.executable, str(engine / "scripts/build_ipa_from_nsp.py"), str(root),
+                   "--platform", "mac-app", "--out", str(artifact), "--work-dir", str(scratch),
+                   "--bundle-id", f"org.nxnative.{title.lower()}", "--language", language, "--progress", "json"]
         with log_path.open("x") as log:
             process = subprocess.Popen(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -189,20 +195,23 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
         if status:
             raise DumpError(f"Native export failed (status {status}); see the private build log",
                             code="native-build-failed", hint=str(log_path))
-        info = plistlib.loads((output / "Contents/Info.plist").read_bytes())
+        info = plistlib.loads((artifact / "Contents/Info.plist").read_bytes())
         if info.get("CFBundleIdentifier") != f"org.nxnative.{title.lower()}":
             raise DumpError("The exported app has an unexpected identity", code="native-output-invalid")
         name = info.get("CFBundleExecutable")
         if not isinstance(name, str) or not name or Path(name).name != name:
             raise DumpError("The native app has an invalid executable name", code="native-output-invalid")
-        executable = output / "Contents/MacOS" / name
+        executable = artifact / "Contents/MacOS" / name
         if not executable.is_file() or executable.is_symlink():
             raise DumpError("The native app has no valid executable", code="native-output-invalid")
-        if any(p.is_symlink() and not p.resolve().is_relative_to(output) for p in output.rglob("*")):
+        if any(p.is_symlink() and not p.resolve().is_relative_to(artifact) for p in artifact.rglob("*")):
             raise DumpError("The exported app references resources outside its bundle", code="native-output-invalid")
-        signature = subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(output)], capture_output=True)
+        signature = subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(artifact)], capture_output=True)
         if signature.returncode:
             raise DumpError("The exported Mac app's signature did not verify", code="native-signature-invalid")
+        if os.path.lexists(output):
+            raise DumpError("The app destination appeared during export; it was preserved", code="native-output-exists")
+        artifact.rename(output)
         result = {"schema_version": 1, "stage": "native-exported", "artifact": str(output),
                   "title_id": title, "version": profile["version"], "engine_commit": verified["commit"],
                   "platform": "macOS", "signature_verified": True, "gameplay_verified": False,
@@ -220,6 +229,10 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
         if process is not None and process.stdout is not None:
             process.stdout.close()
         signal.signal(signal.SIGTERM, previous_signal)
-        shutil.rmtree(scratch)
+        try:
+            if staging is not None:
+                shutil.rmtree(staging)
+        finally:
+            shutil.rmtree(scratch)
     log_path.with_suffix(".receipt.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

@@ -125,6 +125,8 @@ class NativeRuntimeTests(unittest.TestCase):
 a=sys.argv
 out=pathlib.Path(a[a.index('--out')+1]);work=pathlib.Path(a[a.index('--work-dir')+1])
 (work/'owned-build-data').write_text('synthetic scratch')
+out.with_name(out.name+'.key').write_text('synthetic app inventory')
+out.with_name(out.name+'.partial').mkdir()
 mode=a[a.index('--language')+1]
 if mode=='failure':sys.exit(9)
 if mode=='cancel':
@@ -147,6 +149,8 @@ subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(out)],check=True)
     def test_verified_app_and_failure_both_retire_only_their_owned_scratch(self):
         engine, spec = self.export_engine()
         output = self.root / "Synthetic.app"
+        sibling = output.with_name(output.name + ".key")
+        sibling.write_text("preserve unrelated existing inventory")
         with patch("nx2.native_runtime.specification", return_value=spec):
             result = export_mac(self.game, engine, output)
             self.assertTrue(result["signature_verified"])
@@ -157,6 +161,10 @@ subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(out)],check=True)
         self.assertFalse(any(p.is_dir() for p in (self.game / "nx2-work").iterdir()))
         self.assertTrue((self.game / "updates/458752/exefs/main").is_file())
         self.assertTrue(engine.is_dir())
+        self.assertEqual(sibling.read_text(), "preserve unrelated existing inventory")
+        self.assertFalse(list(self.root.glob(".nx2-export-*")))
+        self.assertFalse((self.root / "Failure.app.key").exists())
+        self.assertFalse((self.root / "Failure.app.partial").exists())
 
     @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
     def test_termination_retires_child_and_scratch_without_a_success_receipt(self):
@@ -181,6 +189,8 @@ runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self
             self.assertEqual(process.returncode, 128 + signal.SIGTERM, error.decode())
             self.assertFalse(any(p.is_dir() for p in private.iterdir()))
             self.assertFalse(list(private.glob("*.receipt.json")))
+            self.assertFalse(list(self.root.glob(".nx2-export-*")))
+            self.assertFalse((self.root / "Cancelled.app.key").exists())
         finally:
             if process.poll() is None:
                 process.kill(); process.communicate(timeout=5)
