@@ -134,7 +134,7 @@ runtime bindings and rendering validation remain open. See
 | Decrypted input | Synthetic structures plus Bananza base/update, eighteen verified NSO segments | No complete RomFS payload hashes or signature verification |
 | Invalid input | Truncation, missing modules, empty RomFS, corrupt hashes, invalid ranges, symlinks | Not full RomFS/signature verification |
 | Workspace | Private output, preserved inputs, recorded builds/platform, refused overwrite | No game executable |
-| Native Mac export | Exact Bananza/Raiders admission; completed signed Bananza export installed in Applications; source and cleanup/cancellation fixtures | Bananza first frame/gameplay pending; Raiders not exported; no iOS/network qualification |
+| Native Mac export | Exact Bananza/Raiders admission; I completed and installed a signed Bananza export; its first launch reached the frame loop in the runtime log; source and cleanup/cancellation fixtures pass | Bananza first frame/gameplay pending; Raiders not exported; no iOS/network qualification |
 | CPU diagnostic | Bananza base/update reached `nnMain` in a private headless inherited host | Deliberate stop at graphics bootstrap; inherited service/memory assumptions |
 | Ampere tool | 4,543 accepted graphics intermediates from 4,609 BNSH identities; corrected primitive programs compiled to Metal | No title-wide Metal or game-draw validation; unsupported cases fail |
 | Experimental NVN2 | Base Bananza initializes Metal resources, real HID setup, two native graphics programs and its first buffer alias; authored GPU copy/readback passes | Second virtual views, virtual images and drawing remain incomplete; no game image or export |
