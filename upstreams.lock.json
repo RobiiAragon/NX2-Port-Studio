@@ -49,6 +49,19 @@
           "sha256": "8336c9edf7c11fa7e3730efb05895d4619148f215849a820705e2e3819238cb2"
         }
       ]
+    },
+    {
+      "name": "Eglantine",
+      "url": "https://github.com/Djihads80/Eglantine.git",
+      "commit": "de83c3140e2ab6856d9a1ec1fec1cee96958d087",
+      "role": "Eden-derived Ampere lowerer with RET linkage and TXD improvements; GPL-3.0-or-later",
+      "files": [
+        {
+          "file": "third_party/eglantine-nx2/lower_to_maxwell.h",
+          "upstream_path": "src/shader_recompiler/frontend/ampere/lower_to_maxwell.h",
+          "sha256": "d92a4b6c599507032f7888fd050d8698eaa1c8643b5c89016c2eba412a430ba8"
+        }
+      ]
     }
   ]
 }

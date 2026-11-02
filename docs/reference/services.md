@@ -208,6 +208,15 @@ Most service calls can be found before they crash, before the first boot or the 
 
 ## Input
 
+### Switch 2 HID applet resources and JCMS initialization
+
+- **Symptom:** `[RED] sf: the game connects to service hid itself, which the host does not serve`, followed by a null proxy dereference during controller setup.
+- **Cause:** game-linked `InitializeJcms` sends HID command `3110` for Joy-Con mouse state instead of using the intercepted npad functions. The path then requests root command `0` (`CreateAppletResource`) and applet-resource command `0` (`GetSharedMemoryHandle`). SDK input hooks alone do not implement those requests.
+- **Fix:** `hle_hid_service.c` serves the audited SDK HIPC entry points, strict JCMS lifecycle commands and a real applet resource backed by owned shared memory. The producer publishes the same frontend buttons, axes and player routing through guarded npad rings, with independent edge state. Transfer/shared ownership and mapping are described in [Owned transfer and shared memory handles](memory.md#owned-transfer-and-shared-memory-handles).
+- **Limits:** no optical input provider is claimed: the sixteen JCMS rings describe absent devices with capacity seventeen and count zero. Unprovided shared sensor, touch and mouse rings remain empty. Unknown commands are refused. This is a specific service implementation, not general Switch 2 input compatibility.
+- **Check:** `make -C dm/host/tests hid-service hid-service-sanitize`; controller-state publication and the inherited controller fixtures are also checked with ThreadSanitizer.
+- **Found on:** [Donkey Kong Bananza](../nx2/DONKEY_KONG_BANANZA.md#hid-and-transfer-memory-initialization), base native diagnostic on Mac.
+
 ### History reads fill every requested entry
 
 - **Symptom:** buttons and menus work, the sticks do nothing in play (Super Mario Odyssey: its first hint, "Look Around", waited forever); an `nn::diag` abort with Result 0x2aca in the first frames of `nnMain` (Hollow Knight: Silksong, Unity 6000.0.50f1: `bt: sdk+0x514580 main+0x1296c64 …`).

@@ -6,3 +6,4 @@ xlate_source	af0a596483e1ec36
 spirv-cross	d9dc197f061b42a5
 metal_macosx	Apple metal version 32023.921 (metalfe-32023.921.6)
 metal_iphoneos	Apple metal version 32023.921 (metalfe-32023.921.6)
+ampere_source	425d3163faf267e6a76c1d904c86c0fcc6e9afed54b95a683262c6ebfa7030d4

@@ -1,121 +1,27 @@
-> This is inherited Switch 1 Studio documentation. For NX2 status and commands, see [NX2 Port Studio](README.md).
+# NX2 Port Studio
 
-<p align="center">
-  <img src="docs/images/hero.es.svg" alt="NX Port Studio — Tus juegos de Switch, en apps nativas para Apple" width="100%">
-</p>
+[English](README.md) · **Español** · [Français](README.fr.md) · [日本語](README.ja.md) · [简体中文](README.zh-Hans.md)
 
-<p align="center">
-  <a href="#primeros-pasos">Primeros pasos</a> · <a href="#qué-está-verificado">Estado verificado</a> · <a href="ROADMAP.md">Hoja de ruta</a> · <a href="CONTRIBUTING.md">Colaborar</a> · <a href="CREDITS.md">Créditos</a>
-</p>
+Estoy desarrollando herramientas nativas de Switch 2 para Apple Silicon. En **0.3.0** añadí la exportación de apps para Mac mediante una revisión fijada de [nxnative](https://github.com/seedds/nxnative), manteniendo separado mi backend experimental NVN2.
 
-<p align="center"><a href="README.md">English</a> · <strong>Español</strong> · <a href="README.fr.md">Français</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-Hans.md">简体中文</a></p>
+Actualmente admito los dumps descifrados de **Donkey Kong Bananza, actualización 458752**, y **Splatoon Raiders, actualización 65536**, únicamente cuando coinciden el ID del título y las identidades completas de sus módulos. No presento las pruebas de otros proyectos como pruebas de NX2. **Mario Kart World sigue pendiente; no exporto IPA para iPhone/iPad.**
 
-**NX Port Studio es un espacio de trabajo para macOS que convierte tus propios archivos de juegos de Nintendo Switch en apps nativas para Apple.** Selecciona un juego, prepara las herramientas y recursos, y crea una app de Mac o un port de iPhone/iPad firmado mediante Xcode.
+## Crear una app para Mac
 
-Es un proyecto independiente basado en [seedds/nxnative](https://github.com/seedds/nxnative). Se conservan el reconocimiento al motor original, sus autores y el aviso MIT. Consulta los [créditos](CREDITS.md) y la [licencia](LICENSE).
+1. Selecciono la carpeta que contiene `base/exefs`, `base/romfs` y `updates/<versión>/`, con el RomFS completo de la actualización.
+2. Pulso **Analizar dump** y compruebo que aparece el perfil de exportación.
+3. **Preparar herramientas de exportación Mac** configura un entorno separado y descarga la revisión exacta del motor.
+4. **Crear app de Mac** ejecuta el compilador real, muestra su progreso y verifica la firma. Aplicaciones es el destino predeterminado; preservo las apps existentes.
 
-## Capturas de Studio
+No solicito keys ni firmware para estos archivos ya descifrados. La primera compilación puede tardar una hora. Elimino el directorio temporal de esa operación al terminar o al fallar y conservo sólo su registro privado y recibo; una exportación correcta todavía necesita pruebas de juego.
 
-Capturas de la app funcionando en macOS, en español.
-
-![Nuevo port — archivos de entrada y plataforma Apple](docs/images/es/studio-new-port.jpg)
-
-| Recursos del sistema por versión | Descubrimiento de salas locales |
-| :---: | :---: |
-| [![Biblioteca de recursos de firmware](docs/images/es/studio-firmware.jpg)](docs/images/es/studio-firmware.jpg) | [![Puente de descubrimiento local, desactivado](docs/images/es/studio-local-play.jpg)](docs/images/es/studio-local-play.jpg) |
-
-## Del archivo a la app
-
-- **Progreso real:** una carpeta por juego con su base, actualizaciones y DLC; etapas y errores del motor visibles.
-- **Exportación iOS firmada:** todos los IPA pasan por la firma de Xcode y la verificación del perfil. La instalación es opcional después de exportar correctamente.
-- **Recursos originales:** importa datos de tu propio firmware para modelos Mii, fuentes y certificados, con comprobación de versión y contenido.
-- **Controles nativos:** configuración por juego, movimiento y vibración cuando el sistema y el hardware conectado los exponen.
-- **Redes con alcance claro:** LAN, puente LDN e integración Nextendo son rutas distintas, con pruebas propias.
-
-El motor ejecuta código ARM64 reescrito del juego en Apple silicon e implementa servicios y traducción gráfica. La compatibilidad depende del juego, actualización, perfil y dispositivo exactos. Crear una app no demuestra por sí solo que el juego sea jugable.
-
-## Más allá de la interfaz de compilación
-
-El proyecto también amplía el runtime y las rutas de integración:
-
-- [Sockets Horizon](dm/host/hle_net_backend.c): traducción de direcciones/errores/flags, TCP/UDP reales y cierre/reutilización de descriptores seguros.
-- [Entrada HLE bloqueante](dm/host/entry.S): publicación de registros del juego, pilas nativas y esperas que respetan pausa/reanudación.
-- [TLS de Apple](dm/host/hle_ssl_apple.m): verificación de certificados/hostname y confianza por contexto; el [importador de firmware](dm/tools/nx_extract/FirmwareResources.cs) aporta CertStore original.
-- [Puente LDN original](dm/host/hle_ldn.c): descubrimiento, sesiones, participantes y sincronización reales; falta la comprobación física.
-- [Puente nativo de cuenta](dm/host/hle_nextendo_apple.m) y [rutas del servicio](dm/host/hle_nextendo_routes.c): manejo explícito de credenciales/identidad; OAuth limitado no se convierte en una credencial de juego.
-- [Mapeo de controles](dm/host/controls_map.h) y [ruta Joy-Con de Mac](dm/host/joycon_mac.inc): layouts Nintendo/Xbox, API públicas de Apple y acceso raw calibrado en Mac. En iOS se respetan las capacidades expuestas por sus API públicas.
-
-Cada mecanismo tiene pruebas y alcances distintos. Esto no demuestra que todos los juegos puedan jugar online.
-
-## Qué está verificado
-
-| Área | Evidencia actual | Alcance |
-| --- | --- | --- |
-| Studio en macOS | Pasan las pruebas de compilación, configuración, procesos, recursos y firma Xcode. | Apple silicon; Studio requiere macOS 14+. Algunos juegos necesitan funciones más recientes de macOS/Metal. |
-| LAN Mac ↔ Switch | Un build anterior probado **completó una carrera de Mario Kart 8 Deluxe 3.0.5** con una Switch física. | Es una referencia histórica con versiones coincidentes y modo LAN. El candidato actual no ha repetido esa carrera. |
-| Puente LDN | Las pruebas de protocolo y participantes pasan. Mario Kart 3.0.5 en Mac ya crea el lobby tras corregir la identidad del historial local. | Los intentos físicos anteriores de entrar y crear fallaron; falta repetirlos con la versión corregida y una Switch. Es una ruta diferente de la LAN IP del juego. |
-| Nextendo | Están verificados OAuth con aplicación propia, la obtención de NEX ligada a identidad, su lectura desde el Llavero y el catálogo firmado. | OAuth limitado y la credencial NEX son estados distintos. **No se ha validado una partida NEX online nativa.** |
-| iPhone/iPad | El usuario confirmó que el build firmado de Mario Kart 3.0.5 entra a salas LAN con una Switch física, con ambos dispositivos como anfitrión. | Está comprobada la entrada a la sala; falta validar una carrera completa. Siguen aplicando restricciones de dispositivo, firma y plataforma. |
-| Android/Windows | Planeados después de estabilizar la base Apple. | Aún no hay builds ni compatibilidad anunciada; ARM y x86 requieren trabajo propio. |
-
-## Primeros pasos
-
-### Requisitos
-
-- Mac con Apple silicon y macOS 14 o posterior para Studio; Xcode con Swift 6. El motor o un juego concreto pueden necesitar herramientas gráficas más recientes.
-- Tus archivos de juegos y claves de consola. Las actualizaciones y DLC correspondientes van en la carpeta del mismo juego.
-- Para iPhone/iPad: dispositivo físico apto, cuenta/equipo de desarrollo configurados en Xcode, emparejamiento, confianza y modo de desarrollador. Los objetivos actuales del motor utilizan iOS/iPadOS 26 y hardware A17 Pro/M-series compatible; revisa las notas del juego.
-
-### Compilar Studio
-
-Desde un checkout con el código de Studio y del motor:
+La app Studio requiere macOS 14+, Apple Silicon y Swift 6 para compilarla. La exportación usa los requisitos propios del motor fijado: Xcode 27.2 y su compilador Metal, Python 3.12+, .NET y las herramientas indicadas por nxnative. No reduzco los requisitos del juego a los de la interfaz.
 
 ```sh
-cd macOS/NXPortStudio
-swift test
-swift run NXPortStudio
+swift run --package-path macOS/NXPortStudio NX2PortStudio
+bash scripts/package_nx2_studio.sh "/ruta/NX2 Port Studio.app"
 ```
 
-Crear un paquete local:
+Conservo la inspección del formato `exefs/` + `romfs/` y los proyectos de desarrollo privados. Mi [guía de exportación](docs/nx2/NATIVE_EXPORT.md) documenta perfiles, revisión, almacenamiento y límites; la [arquitectura](docs/nx2/ARCHITECTURE.md) describe el backend experimental.
 
-```sh
-./scripts/package_app.sh "/ruta/NX Port Studio.app"
-```
-
-El script no sobrescribe un destino existente. Su firma ad-hoc predeterminada corresponde a la **app de Studio para Mac**; una distribución pública notarizada es otro paso. Los **IPA de juegos se firman con Xcode**, sujetos a las reglas de cuenta, dispositivo y vencimiento de Apple.
-
-### Crear un port
-
-1. Abre **Entorno** y prepara las herramientas que el motor indique como necesarias.
-2. En **Nuevo port**, selecciona la carpeta del juego y tu `prod.keys`.
-3. Opcionalmente importa tus recursos originales en **Firmware** y selecciona el catálogo para nuevos ports.
-4. Elige **Mac** o **iPhone/iPad**. En iOS, selecciona un dispositivo apto emparejado e introduce tu Team ID de Xcode.
-5. Crea el port. En iOS, la operación sólo termina correctamente después de firmar y verificar el IPA. **Instalar al terminar** controla la instalación, no la firma.
-
-La interfaz inicia en español y permite elegir inglés, francés, japonés y chino simplificado en la barra lateral o en el menú Idioma. El idioma de la interfaz y el del juego se configuran por separado. La salida técnica mantiene su idioma original. Los productos de compilación y datos extraídos permanecen junto al juego seleccionado. Las exportaciones se guardan en Descargas de forma predeterminada.
-
-## Cada modo de red tiene requisitos distintos
-
-**LAN:** utiliza el modo LAN propio del juego y sockets IP reales. Requiere versiones coincidentes y la misma red. La carrera del build anterior es la referencia física; no certifica un candidato posterior del runtime. El candidato actual 3.0.5 para Mac ya [crea una sala LAN local](dm/games/0100152000022000/README.md#local-network-validation) y llega al lobby y a las reglas del anfitrión. La incorporación de otro dispositivo y una nueva carrera siguen pendientes para ese candidato.
-
-**LDN:** transporta por IP el descubrimiento y los participantes del servicio inalámbrico local. Requiere un peer/módulo compatible y un juego coincidente. Las pruebas entre procesos no sustituyen una comprobación física.
-
-Algunos juegos también necesitan una identidad del historial local al preparar la sala. Importa tu propio firmware en Studio y selecciónalo antes de crear el port. El importador puede extraer ese recurso privado de un módulo friends reconocido; se ha validado el firmware 23.0.1. [La implementación y sus límites](docs/reference/services.md#local-play-history-identity-required-after-network-creation) se documentan por separado de las cuentas online.
-
-**Nextendo:** integra autorización de cuenta y políticas firmadas del servicio. Studio utiliza el ID de tu aplicación registrada y guarda las credenciales en el Llavero de esta Mac. OAuth con permisos de cuenta no se convierte automáticamente en una credencial NEX de juego. Una solicitud explícita puede obtener una credencial NEX verificada contra la identidad; ese paso de cuenta ya fue comprobado. Un servidor habilitado, una versión aceptada y una credencial guardada describen requisitos distintos; ninguno demuestra una partida online nativa. Consulta la política vigente en el catálogo firmado de la app.
-
-El port incluye **configuración de Nextendo desde el iPhone/iPad**: autorización en el navegador del sistema, cuenta en el Llavero de la app, actualización del catálogo firmado y comprobación de versión/servicios antes de iniciar. El flujo tiene pruebas con datos sintéticos; la autorización física en el navegador sigue en validación. Configurar la cuenta no confirma una partida nativa online.
-
-En iOS, el runtime implementa el descubrimiento unicast automático en una subred IPv4 local apta y acotada cuando no dispone de broadcast/multicast. La dirección de peer avanzada es opcional. El usuario confirmó la entrada a salas LAN en ambos roles con una Switch física; falta validar una carrera completa.
-
-Para las salas creadas en el iPhone/iPad, **Juego local → Activar puente** habilita un [puente de descubrimiento local](dm/net/lan_relay.c) opcional en el Mac. Mantén Studio abierto en la misma red. El puente retransmite el descubrimiento LAN/LDN compatible; la partida conecta directamente a los participantes. Se inicia apagado, muestra tráfico y errores reales, y no requiere cuenta ni introducir una IP. **La entrada a salas LAN está confirmada por el usuario en ambos roles. Las carreras y la interoperabilidad LDN siguen pendientes.**
-
-### Bloqueos actuales de servicios de juego
-
-Las rutas nativas Nextendo probadas siguen bloqueadas por certificados: cinco certificados de servidor con diez años de validez fallan la política nativa de Apple, y el endpoint de autenticación configurado para Mario Kart carece de un certificado validado para su hostname. La verificación sigue activa. El build disponible de Mario Kart 8 Deluxe **3.0.5** también queda fuera del requisito actual **4.0.1** del catálogo firmado. Estos bloqueos son independientes del paso de credenciales de cuenta que sí funcionó. La comprobación corresponde al 2026-10-28; actualiza el catálogo para consultar la política vigente.
-
-## Contenido del repositorio
-
-Aquí van código, arte original del proyecto, perfiles, herramientas, documentación y licencias de dependencias. No van juegos, datos de juego descifrados, claves, archivos de firmware, credenciales ni partidas personales. No se publican capturas, portadas, arte, iconos de juegos ni archivos originales del SDK de Nintendo. Los resultados de validación se describen en texto.
-
-Consulta [Contributing](CONTRIBUTING.md) y la [hoja de ruta](ROADMAP.md). Este proyecto no está afiliado con Nintendo, Apple, Nextendo ni los autores del motor original; utilizar un motor o servicio no implica su respaldo.
+Doy crédito a NX Port Studio, nxnative y las referencias Eden/Eglantine, preservando sus avisos y licencias en [Créditos](CREDITS.md) y [fuentes fijadas](upstreams.lock.json). No incluyo juegos, recursos de Nintendo, firmware, keys, cuentas ni partidas en el repositorio o en la distribución de Studio.

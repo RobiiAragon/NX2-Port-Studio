@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Verify the signed input-stage app remains sealed after importing synthetic data."""
+"""Verify the signed app and pinned export descriptor survive synthetic imports."""
 import argparse
 import hashlib
 import json
@@ -28,6 +28,10 @@ def main():
     if any(prefix in binary for prefix in (b"/Users/", b"/home/")):
         raise SystemExit("Release executable contains a local development path")
     before = hashes(app)
+    engine = app / "Contents/Resources/nx2-engine"
+    descriptor = json.loads((engine / "nx2/native_runtime.json").read_text())
+    assert len(descriptor["commit"]) == 40 and descriptor["platform"] == "macOS"
+    assert (engine / "requirements-nx2-runtime.txt").is_file()
     with tempfile.TemporaryDirectory(prefix="nx2-bundle-test-") as temporary:
         source = dump(Path(temporary) / "Synthetic input", compressed="zbic")
         script = app / "Contents/Resources/nx2-engine/scripts/nx2.py"

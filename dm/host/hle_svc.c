@@ -1,6 +1,7 @@
 // Horizon kernel system calls (triggered by the SDK runtime once the SDK is loaded). Only what the P1 boot chain needs is implemented: memory layout + heap + query + debug output + timing.
 // Register convention: inputs w1.. / outputs w0=Result, x1=value (GetInfo / SetHeapSize), consistent with the public Horizon ABI.
 #include "dm.h"
+#include "hle_memory.h"
 #include <sys/mman.h>
 #include <errno.h>
 #include <unistd.h>
@@ -8,6 +9,7 @@
 #include <sched.h>
 #include <time.h>
 #include <stdatomic.h>
+#include <mach/mach.h>
 
 // Reserve one whole block of guest address space, partitioned the Horizon way (address values are the real addresses returned by the host's mmap).
 // It only takes address space, not memory.
@@ -182,10 +184,12 @@ static uint32_t map_arguments(uint64_t dst, uint64_t src, uint64_t size) {
     if (size > UINT64_MAX - src || size > UINT64_MAX - dst) return 0xD401;
     return memory_contains((uintptr_t)g_stack, g_stack_cap, dst, size) ? 0 : 0xDC01;
 }
+static int memory_transfer_busy(uint64_t address, uint64_t size);
+static void memory_transfer_query(uint64_t address, uint64_t *base, uint64_t *size, uint32_t *attr, uint64_t *permission);
 static int map_source_busy(uint64_t addr, uint64_t size) { // g_map_lock held; nonwrapping ranges
     for (int i = 0; i < g_nmap; ++i)
         if (addr < g_map[i].src + g_map[i].size && g_map[i].src < addr + size) return 1;
-    return 0;
+    return memory_transfer_busy(addr, size);
 }
 // Loader text/patch seals use 16 KiB boundaries, independently of host page size.
 static void module_readonly_run(uint64_t off, uint64_t start, uint64_t end,
@@ -230,6 +234,7 @@ static void map_source_query(uint64_t addr, uint64_t *base, uint64_t *size, uint
         remaining = upper - (lower - lo); lo = lower;
     }
     *base = lo; *size = remaining;
+    memory_transfer_query(addr, base, size, attr, perm);
 }
 
 // Diagnostic DM_ALIAS_WINDOWS=<window MB>: every 30 s, the mapped memory of each window of that size in the alias region (windows aligned to the size in absolute addresses, counted from the page
@@ -252,13 +257,28 @@ static void *alias_windows_thread(void *arg) {
     return NULL;
 }
 
+#include "memory_objects.inc"
 int svc_thread(int num, uint64_t *regs);   // hle_thread.c: thread and synchronization kind
 
 uint64_t svc_dispatch(int num, uint64_t *regs, uint64_t orig_addr) {
     { void hlecount_svc(int); hlecount_svc(num); }   // DM_HLECOUNT: svc counts by number
     mem_init();
+    // Memory handles own actual pinned storage and have a separate, disjoint
+    // namespace from thread/event handles. Stale closes must fail.
+    if (num == 0x16 && regs[0] >= MEMORY_HANDLE_BASE && regs[0] < MEMORY_HANDLE_END) {
+        regs[0] = memory_handle_close((uint32_t)regs[0]); return 0;
+    }
     if (svc_thread(num, regs)) return regs[0];
     switch (num) {
+    case 0x13: case 0x14: // Map / UnmapSharedMemory(handle, address, size, permission)
+        regs[0] = memory_shared_map((uint32_t)regs[0], regs[1], regs[2], (unsigned)regs[3], num == 0x14);
+        return 0;
+    case 0x15: { // CreateTransferMemory(out*, address, size, owner_permission)
+        uint32_t handle = 0;
+        regs[0] = memory_transfer_create(regs[1], regs[2], (unsigned)regs[3], &handle);
+        regs[1] = handle;
+        return 0;
+    }
     case 0x01: {  // SetHeapSize(out_addr*, size)  → x1 = heap base
         size_t size = regs[1];
         if (size > g_heap_cap) { LOG("SetHeapSize OOM: req %#zx > cap %#zx", size, g_heap_cap); regs[0] = 0xD401; return 0; }
@@ -340,7 +360,7 @@ uint64_t svc_dispatch(int num, uint64_t *regs, uint64_t orig_addr) {
         int mapped = 0, in_alias = addr >= ab && addr < ae;
         if (in_alias) alias_query(addr, &rb, &rn, &mapped);
         if (a >= g_heap && a < g_heap + g_heap_cur) { base=(uint64_t)g_heap; size=g_heap_cur; state=5/*Heap*/; perm=3; }
-        else if ((k = map_find(addr, 1))) { base=g_map[k-1].base; size=g_map[k-1].size; state=g_map[k-1].state; perm=3; }
+        else if ((k = map_find(addr, 1))) { base=g_map[k-1].base; size=g_map[k-1].size; state=g_map[k-1].state; perm=state == 6 ? memory_mapping_permission(addr) : 3; }
         else if (in_alias && mapped) { base=rb; size=rn; state=5; perm=3; }
         else if (a >= g_as && a < g_as + RESERVE) {   // free: up to the adjacent mapping/heap boundary
             uint64_t lo = (uint64_t)g_as, hi = (uint64_t)g_as + RESERVE;
@@ -407,6 +427,7 @@ uint64_t svc_dispatch(int num, uint64_t *regs, uint64_t orig_addr) {
             LOG("SVC %#x outside the alias region %p+%#zx", num, (void *)a, size); regs[0] = 0xD401; return 0;
         }
         pthread_mutex_lock(&g_map_lock);
+        if (map_find(a, size)) { pthread_mutex_unlock(&g_map_lock); regs[0] = 0xd401; return 0; } // Shared mappings have their own backing and lifetime.
         // The SDK extends committed windows across borrowed stack sources
         // (Raging Loop, StandardAllocator). Recommit preserves every live byte;
         // only decommit can invalidate backing required for eventual copyback.

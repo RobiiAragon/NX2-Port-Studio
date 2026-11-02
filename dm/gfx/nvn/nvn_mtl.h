@@ -14,6 +14,13 @@ void bf_want_note(const char *key);
 // Memory pool: [mem, mem+size) is expanded outward to page boundaries to build a zero-copy buffer; look up the buffer and offset by GPU address (= CPU address)
 void mtl_pool_add(const void *mem, uint64_t size);
 void mtl_pool_del(const void *mem);
+// Exact page-aligned owned view. Consumes one owner reference on success OR
+// failure; release(owner) runs when the no-copy buffer actually dies. Returns
+// failure without publishing a registry entry. NVN2 only, no retry/clamping.
+int mtl_pool_add_owned(const void *mem, uint64_t size, void *owner, void (*release)(void *));
+// Caller has closed its public view. Drain submitted GPU work before removing
+// residency/registry references; the no-copy owner may outlive this function.
+void mtl_pool_del_owned(const void *mem);
 // memory pool Finalize: evict the textures built on this pool (pool object address) from the storage-sharing table
 void mtl_alias_drop_pool(const void *pool);
 int mtl_addr(uint64_t addr, uint64_t len, void **buf, uint64_t *off);   // 1 on success; buf is a (__bridge) id<MTLBuffer>
@@ -38,6 +45,7 @@ uint64_t mtl_sub_commit(void);
 uint64_t mtl_last_fence(void);                       // Fence value of the most recent submit (0 = never submitted)
 int mtl_wait(uint64_t fence, uint64_t timeout_ns);   // Returns 1 when the GPU has completed up to fence, 0 on timeout
 int mtl_wait_acq(uint64_t fence, uint64_t timeout_ns);   // the same for a sync WindowAcquireTexture handed out (its own line in the wait ledger, DM_NVN_WAITS)
+int mtl_last_commit_error(void);
 void mtl_finish(void);                               // Wait for all submitted commands to complete
 void mtl_drain(void);                                // Wait for all commands on the queue (including presents) to complete: submit an empty command buffer and wait for it
 void mtl_xv_window_tex(uint64_t serial);   // Register a window (swapchain) texture: the cross-submit validity ledger never collects it
@@ -47,3 +55,8 @@ void *mtl_device_classic(void);   // the same for a layer that draws only on cla
 uint64_t mtl_ext_tex(void *tex);
 uint64_t mtl_present_ext(uint64_t serial, double period, void *ev, uint64_t ev_val, const int crop[4]);   // crop: x, y, w, h of the texture to show (NULL = all of it)
 void mtl_present_wait(uint64_t ticket);   // as in nvn_obj.h: wait until that present has been handed to the GPU
+
+// Diagnostic state of the last audited NVN2 reservation control record.
+void mtl_nvn2_scratch_state(uint64_t *address, uint64_t *size, uint64_t *records);
+
+int mtl_nvn2_program_prepare(const void *program);

@@ -241,6 +241,34 @@ static void t_motion(void) {
     dm_motion_set_player(0,NULL); dm_motion_set_player(1,NULL); hid_guest_time=1000000000ull; dm_pad_players(1);
 }
 
+static void t_shared_input(void) {
+    static _Alignas(16) uint8_t memory[0x40000];
+    g_mode = 1; ids((uint32_t[]){0, 1, NPAD_HANDHELD}, 3); dm_pad_players(3);
+    dm_input_set(0, 0, 0, 0, 0); dm_pad_set(0, 0, 0, 0, 0); dm_pad_set_player(1, 0, 0, 0, 0, 0);
+    dm_hid_write_shared(memory, 100);
+    dm_input_set(DM_BTN_A, 1200, -500, 0, 0); dm_pad_set_player(1, DM_BTN_B, 0, 0, -800, 0);
+    dm_hid_write_shared(memory, 101);
+    HidSharedNpadRing *first = (void *)(memory + 0x9a28), *second = (void *)(memory + 0xea28);
+    HidSharedSample *sample = &first->samples[first->tail];
+    CHECK(*(uint32_t *)(memory + 0x9a00) == STYLE_FULLKEY && first->capacity == 17, "shared HID reports the actual npad style and ring capacity");
+    CHECK(sample->guard == 101 && sample->state.sampling == 101 && sample->state.buttons & DM_BTN_A && sample->state.lx == 1200 && sample->state.ly == -500,
+          "shared-memory state carries real buttons, axes and matching sample guard");
+    sample = &second->samples[second->tail];
+    CHECK(sample->state.buttons & DM_BTN_B && !(sample->state.buttons & DM_BTN_A) && sample->state.rx == -800, "shared HID preserves player routing");
+    dm_input_set(0, 0, 0, 0, 0); dm_hid_write_shared(memory, 102);
+    CHECK(!(first->samples[first->tail].state.buttons & DM_BTN_A) && buttons_of(0, STYLE_FULLKEY) & DM_BTN_A,
+          "shared publication consumes its own edge latch without stealing the SDK reader's edge");
+    for (uint64_t sequence = 103; sequence < 130; ++sequence) dm_hid_write_shared(memory, sequence);
+    CHECK(first->tail < 17 && first->count == 16, "shared ring wraps with bounded history");
+    g_mode = 0; dm_hid_write_shared(memory, 130);
+    HidSharedNpadRing *handheld = (void *)(memory + 0x31a00 + 0x378);
+    CHECK(*(uint32_t *)(memory + 0x9a00) == 0 && *(uint32_t *)(memory + 0x31a00) == STYLE_HANDHELD &&
+          handheld->samples[handheld->tail].state.attributes & ATTR_CONNECTED, "shared HID follows handheld mode");
+    dm_pad_players(1); dm_hid_write_shared(memory, 131);
+    CHECK(*(uint32_t *)(memory + 0xea00) == 0 && !second->samples[second->tail].state.attributes, "shared HID disconnects a departed player");
+    g_mode = 1;
+}
+
 int main(void) {
     CHECK(setenv("DM_RUMBLE_LOG", "1", 1) == 0, "enable rumble diagnostics");
     t_slots();
@@ -248,6 +276,7 @@ int main(void) {
     t_motion();
     t_vibration();
     t_rumble_log();
+    t_shared_input();
     printf("hid players: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

@@ -1,8 +1,10 @@
 // NVN interface layer: takes over the nvnBootstrapLoader imported by main; the NVN driver in sdk is not executed at all.
-// All 523 NVN names return counting thunks (nvn_thunks.S), and the thunks forward to the implementations here:
+// Known NVN names return counting thunks (nvn_thunks.S), which forward to implementations here:
 //   - those with semantics (device / memory pools / textures and samplers / queue / window / sync / events / command buffer memory) are implemented per NVN semantics, and the objects are real;
 //   - those that only change GPU state and have no CPU-visible result (state objects, bindings, draws, clears...) are recorded as commands and replayed at submit;
-//   - the rest (the 307 that main only loads but never calls + those without a prototype in the header) go to nvn_unimpl_entry: reports a failure and prints the name when called.
+//   - the rest go to nvn_unimpl_entry: reports a failure and prints the name when called.
+// DM_GAME_NVN2 admits only an audited ABI subset and aborts on all other calls;
+// the inherited NVN 1 implementation is not assumed to implement NVN2.
 // GPU address = CPU address (memory pools use the real memory given by the game, also built as zero-copy MTLBuffer). Commands are recorded into the command memory given by the game and replayed at submit into a
 // Metal command buffer (nvn_mtl.m): buffer copies / uniform updates go through blit (GPU ordering), event value writes / counters are written after the GPU completes;
 // sync object = submit fence value, and waits are released only after the GPU completes.
@@ -16,6 +18,7 @@
 #include "nvn_pace.h"
 #include "nvn_fstep.h"
 #include "nvn_timestamp.h"
+#include "nvn2_abi.h"
 #include "../../host/front.h"
 #include "nvn_dirty.h"
 #include <mach/mach_time.h>
@@ -53,23 +56,36 @@ void *nvn_big_real[NVN_NFUNC];            // the real implementation of function
 void *nvn_real[NVN_NFUNC];               // DM_NVN_PROF: the real implementation called by the timing wrapper
 _Atomic uint64_t nvn_prof_ticks[NVN_NFUNC]; // DM_NVN_PROF: cumulative time of each function (cntvct counts)
 static uint8_t g_unimpl_seen[NVN_NFUNC];
+#if DM_GAME_NVN2
+static size_t nvn2_readable_extent(const void *pointer);
+#endif
 
 uint64_t nvn_unimpl_c(nvn_slot_t *slot, uint64_t x0, uint64_t x1, uint64_t x2) {
     unsigned i = (unsigned)(slot - nvn_slot);
     if (!g_unimpl_seen[i]++) LOG("[RED] NVN unimplemented function called: %s (x0=%#llx x1=%#llx x2=%#llx)", nvn_names[i], x0, x1, x2);
+#if DM_GAME_NVN2
+    if (!strcmp(nvn_names[i],"nvnMemoryPoolMapVirtual") && x1 && x1<=1024 && nvn2_readable_extent((const void *)(uintptr_t)x2)>=40) {
+        uint64_t request[5]; memcpy(request,(const void *)(uintptr_t)x2,sizeof request);
+        LOG("[nvn] guarded MapVirtual first request: physical=%p physicalOffset=%#llx virtualOffset=%#llx size=%#llx storageClass=%#x",
+            (void *)(uintptr_t)request[0],request[1],request[2],request[3],(unsigned)request[4]);
+    }
+#endif
+    if (DM_GAME_NVN2) die("[RED] NVN2 entry point has no verified implementation: %s", nvn_names[i]);
     return 0;
 }
 
 typedef struct { const char *name; void *fn; } nvn_impl;
+// The Mach-O section is a packed array of records. ASan's per-global redzones
+// must not change its stride; implementation bodies remain fully instrumented.
 #define NVN(name, ret, ...)                                                                       \
     static ret h_##name(__VA_ARGS__);                                                             \
     static const NVNT_##name chk_##name __attribute__((unused)) = h_##name;                       \
-    __attribute__((used, section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
+    __attribute__((used, no_sanitize("address"), section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
     static ret h_##name(__VA_ARGS__)
 // Newer interfaces without prototypes: no signature check
 #define NVN_NOPROTO(name, ret, ...)                                                               \
     static ret h_##name(__VA_ARGS__);                                                             \
-    __attribute__((used, section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
+    __attribute__((used, no_sanitize("address"), section("__DATA,swnvn"))) static const nvn_impl e_##name = {#name, (void *)h_##name}; \
     static ret h_##name(__VA_ARGS__)
 
 static int g_log;
@@ -77,6 +93,14 @@ uint64_t nvn_new_serial(void) { static _Atomic uint64_t n; return ++n; }
 static unsigned g_nsem;                          // Number of semantic implementations (filled by nvn_init_slots)
 #define OLOG(...) do { if (g_log) LOG("[nvn] " __VA_ARGS__); } while (0)
 
+static void *nvn2_texture_impl(const char *name);
+static void *nvn2_window_impl(const char *name);
+static void *nvn2_program_impl(const char *name);
+static void *nvn2_vertex_impl(const char *name);
+static void *nvn2_state_impl(const char *name);
+#if DM_GAME_NVN2
+int nvn_host_readable(uint64_t address,uint64_t bytes);
+#endif
 static void nvn_init_slots(void) {
     static int done; if (done) return; done = 1;
     g_log = getenv("DM_NVN_LOG") != NULL;
@@ -85,10 +109,21 @@ static void nvn_init_slots(void) {
     unsigned nim = im ? (unsigned)(sz / sizeof *im) : 0, hit = 0;
     for (unsigned i = 0; i < NVN_NFUNC; i++) nvn_slot[i].fn = (void *)nvn_unimpl_entry;
     for (unsigned k = 0; k < nim; k++) {
+        if (DM_GAME_NVN2 && !nvn2_common_abi_verified(im[k].name)) continue;
         unsigned i = 0;
         while (i < NVN_NFUNC && strcmp(nvn_names[i], im[k].name)) i++;
         if (i == NVN_NFUNC) die("NVN implementation %s is not in main's name table", im[k].name);
         nvn_slot[i].fn = im[k].fn; hit++;
+    }
+    if (DM_GAME_NVN2) for (unsigned i = 0; i < NVN_NFUNC; ++i) {
+        void *fn = nvn2_texture_impl(nvn_names[i]);
+        if (!fn) fn = nvn2_window_impl(nvn_names[i]);
+        if (!fn) fn = nvn2_program_impl(nvn_names[i]);
+        if (!fn) fn = nvn2_vertex_impl(nvn_names[i]);
+        if (!fn) fn = nvn2_state_impl(nvn_names[i]);
+        if (!fn) continue;
+        if (nvn_slot[i].fn == (void *)nvn_unimpl_entry) ++hit;
+        nvn_slot[i].fn = fn;
     }
     g_nsem = hit;
 }
@@ -102,18 +137,21 @@ static void *nvn_lookup(const char *name) {
 }
 
 // nvnBootstrapLoader is imported by main (defined in sdk); after it is forcibly taken over, the NVN driver in sdk is no longer referenced
-HLE_FORCE("nvnBootstrapLoader", "the NVN graphics API is replaced wholesale with a host null device (Metal behind it); the SDK's NVN driver does not run",
+HLE_FORCE("nvnBootstrapLoader", "NVN/NVN2 API interception uses Metal-backed host objects; the SDK's GPU driver does not run",
           void *, h_nvnBootstrapLoader, const char *name) { return nvn_lookup(name); }
 
 // ---------- Boolean parameters: Switch callers do not extend them, only look at the low 8 bits ----------
 #define B(x) ((x) & 0xff)
 
 #include "nvn_obj.h"
+#include "nvn2_alias.h"
 
 // ---------- Device ----------
 NVN(nvnDeviceBuilderSetDefaults, void, NVNdeviceBuilder *b) { memset(b, 0, sizeof(dev_builder_t)); }
 NVN(nvnDeviceBuilderSetFlags, void, NVNdeviceBuilder *b, int f) { ((dev_builder_t *)b)->flags = f; }
+NVN_NOPROTO(nvnDeviceBuilderGetFlags, uint32_t, const NVNdeviceBuilder *b) { return ((const dev_builder_t *)b)->flags; }
 NVN(nvnDeviceInitialize, NVNboolean, NVNdevice *d, const NVNdeviceBuilder *b) {
+    if (DM_GAME_NVN2) mtl_init();
     dev_t_ *o = (dev_t_ *)d; memset(o, 0, sizeof *o);
     o->magic = MAGIC('D', 'E', 'V', 0); o->flags = ((const dev_builder_t *)b)->flags;
     o->origin = NVN_WINDOW_ORIGIN_MODE_LOWER_LEFT; mtl_set_origin_lower_left(1);   // NVN's default; every game so far switched to upper-left right away, Link's Awakening keeps it
@@ -122,6 +160,7 @@ NVN(nvnDeviceInitialize, NVNboolean, NVNdevice *d, const NVNdeviceBuilder *b) {
     return 1;
 }
 NVN(nvnDeviceFinalize, void, NVNdevice *d) { ((dev_t_ *)d)->magic = 0; }
+NVN_NOPROTO(nvnDeviceGetFlags, uint32_t, const NVNdevice *d) { return ((const dev_t_ *)d)->flags; }
 NVN(nvnDeviceGetProcAddress, PFNNVNGENERICFUNCPTRPROC, const NVNdevice *d, const char *name) {
     (void)d; return (PFNNVNGENERICFUNCPTRPROC)nvn_lookup(name);
 }
@@ -158,6 +197,10 @@ static void nvn_api(int api[2]) {
 NVN(nvnDeviceGetInteger, void, const NVNdevice *d, NVNdeviceInfo what, int *out) {
     (void)d;
     unsigned w = (unsigned)what;
+    if (DM_GAME_NVN2) {
+        if (nvn2_protocol_integer(w,out)) return;
+        die("[RED] NVN2 device property %#x has not been implemented",w);
+    }
     // 0x5F separate sampler binding count and 0x60/0x61 are not in the table measured on SMO: 0x5F is given 4096 per the sampler pool limit, unverified; 0x60/0x61 report a failure and return 0
     // 0x67 (SDK 19): FINAL FANTASY TACTICS - The Ivalice Chronicles reads it before every program it loads and passes it as the alignment of its copies of the shader's control section and code
     // (main+0x49800; its allocator raises anything below 8 to 8). Not measured on hardware: 256, the alignment of shader code in a memory pool; the host reads shaders by key, so any value works
@@ -190,33 +233,120 @@ NVN(nvnDeviceGetDepthMode, NVNdepthMode, const NVNdevice *d) { return ((const de
 NVN(nvnDeviceFinalizeCommandHandle, void, NVNdevice *d, NVNcommandHandle h) { (void)d; (void)h; }
 
 // ---------- Memory pools ----------
-NVN(nvnMemoryPoolBuilderSetDefaults, void, NVNmemoryPoolBuilder *b) { memset(b, 0, sizeof(pool_builder_t)); }
+NVN(nvnMemoryPoolBuilderSetDefaults, void, NVNmemoryPoolBuilder *b) {
+#if DM_GAME_NVN2
+    pool_builder_t *s = (pool_builder_t *)b;
+    s->flags = 0x21; s->mem = NULL; s->size = 0; s->storage_flags = 0;
+    memset(s->external, 0, sizeof s->external);
+#else
+    memset(b, 0, sizeof(pool_builder_t));
+#endif
+}
 NVN(nvnMemoryPoolBuilderSetDevice, void, NVNmemoryPoolBuilder *b, NVNdevice *d) { ((pool_builder_t *)b)->dev = d; }
-NVN(nvnMemoryPoolBuilderSetStorage, void, NVNmemoryPoolBuilder *b, void *m, size_t n) { ((pool_builder_t *)b)->mem = m; ((pool_builder_t *)b)->size = n; }
+NVN(nvnMemoryPoolBuilderSetStorage, void, NVNmemoryPoolBuilder *b, void *m, size_t n) {
+    ((pool_builder_t *)b)->mem = m; ((pool_builder_t *)b)->size = n;
+#if DM_GAME_NVN2
+    ((pool_builder_t *)b)->storage_flags = 0;
+#endif
+}
 NVN(nvnMemoryPoolBuilderSetFlags, void, NVNmemoryPoolBuilder *b, int f) { ((pool_builder_t *)b)->flags = f; }
 static uint8_t *vpool_reserve(const pool_t *o); static void vpool_release(const pool_t *o);   // sparse virtual pools, see MapVirtual
 NVN(nvnMemoryPoolInitialize, NVNboolean, NVNmemoryPool *p, const NVNmemoryPoolBuilder *b) {
     const pool_builder_t *s = (const pool_builder_t *)b; pool_t *o = (pool_t *)p;
+#if DM_GAME_NVN2
+    if (nvn2_pool_identity_registered(o)) {
+        LOG("[RED] NVN2 MemoryPoolInitialize refused: object %p is already registered",(void *)o); return 0;
+    }
+    memset(o, 0, sizeof *o);
+    if (s->flags&0x200) {
+        // A virtual pool reserves address space, never positive physical backing.
+        // The fresh buffer-only MapVirtual adapter supplies real aliases later.
+        if (s->mem || !s->size || (s->size&65535) || (s->flags&~0x2b1) || !(s->flags&1) ||
+            ((s->flags&0x30)!=0x10 && (s->flags&0x30)!=0x20)) {
+            LOG("[RED] NVN2 virtual reservation has unsupported flags/storage/alignment flags=%#x size=%#llx",s->flags,(unsigned long long)s->size); return 0;
+        }
+        o->magic=MAGIC('P','O','O','L'); o->flags=s->flags; o->size=s->size;
+        o->gpu_mem=vpool_reserve(o); o->mem=o->gpu_mem;
+        if (!o->gpu_mem) { memset(o,0,sizeof *o); return 0; }
+        return 1;
+    }
+    if (!s->size) {
+        // A real empty reservation: no CPU/GPU address and no zero-length MTLBuffer.
+        o->magic=MAGIC('P','O','O','L'); o->flags=s->flags;
+        OLOG("MemoryPool %p empty (size/address 0) flags=%#x",(void *)p,o->flags);
+        return 1;
+    }
+    if (!s->mem) { LOG("[RED] NVN2 positive memory pool size has no backing"); return 0; }
+#endif
     o->magic = MAGIC('P', 'O', 'O', 'L'); o->flags = s->flags; o->mem = s->mem; o->size = s->size;
     if (!o->mem && (o->flags & 0x200)) { uint8_t *vr = vpool_reserve(o); if (vr) o->mem = vr; }   // a sparse virtual pool's own address range (see MapVirtual)
-    else if (o->mem) { mtl_pool_add(o->mem, o->size); nvn_dirty_add_range(o->mem, o->size); }
+    else if (o->mem) {
+#if DM_GAME_NVN2
+        // Physical pages and GPU_NO_ACCESS storage are real CPU backing, not a
+        // directly GPU-addressable allocation. Virtual aliases need a separate
+        // audited mapping; do not manufacture a Metal buffer/address here.
+        if (!(o->flags&0x108)) mtl_pool_add(o->mem,o->size);
+#else
+        mtl_pool_add(o->mem,o->size);
+#endif
+        nvn_dirty_add_range(o->mem,o->size);
+    }
+#if DM_GAME_NVN2
+    o->gpu_mem=(o->flags&0x108)?NULL:o->mem;
+    if ((o->flags&0x100) && !nvn2_source_register(o)) {
+        nvn_dirty_remove_range(o->mem); memset(o,0,sizeof *o); return 0;
+    }
+#endif
     if (!o->mem && !(o->flags & 0x200)) LOG("[RED] MemoryPoolInitialize: non-virtual pool has no storage flags=%#x size=%#llx", o->flags, o->size);
     if (getenv("DM_NVN_VLOG")) { LOG("[nvn] MemoryPool %p mem=%p size=%#llx flags=%#x", (void *)p, (void *)o->mem, (unsigned long long)o->size, o->flags); void dm_backtrace(uint64_t fp); dm_backtrace((uint64_t)__builtin_frame_address(0)); }
     OLOG("MemoryPool %p mem=%p size=%#llx flags=%#x", (void *)p, (void *)o->mem, o->size, o->flags);
     return 1;
 }
 static void fl_add(const uint8_t *a, uint64_t n); static void fl_drop(const uint8_t *a, uint64_t n);   // flushed ranges, see nvn_flushed
-NVN(nvnMemoryPoolFinalize, void, NVNmemoryPool *p) { if (((pool_t *)p)->flags & 0x200) vpool_release((pool_t *)p);
+NVN(nvnMemoryPoolFinalize, void, NVNmemoryPool *p) {
+#if DM_GAME_NVN2
+    pool_t *pool=(pool_t *)p;
+    if ((pool->flags&0x100) && pool->size && nvn2_source_close(pool,1)!=NVN2_ALIAS_OK)
+        die("[RED] NVN2 physical pool Finalize refused: live alias/CPU lease or stale generation");
+#endif
+    if (((pool_t *)p)->flags & 0x200) vpool_release((pool_t *)p);
     if (((pool_t *)p)->mem && !(((pool_t *)p)->flags & 0x200)) {   // A virtual pool's storage is borrowed from a physical pool; do not unregister it
- nvn_dirty_remove_range(((pool_t *)p)->mem); mtl_pool_del(((pool_t *)p)->mem); fl_drop(((pool_t *)p)->mem, ((pool_t *)p)->size); } mtl_alias_drop_pool(p); ((pool_t *)p)->magic = 0; }
+ nvn_dirty_remove_range(((pool_t *)p)->mem);
+#if DM_GAME_NVN2
+ if (((pool_t *)p)->gpu_mem) mtl_pool_del(((pool_t *)p)->mem);
+#else
+ mtl_pool_del(((pool_t *)p)->mem);
+#endif
+ fl_drop(((pool_t *)p)->mem, ((pool_t *)p)->size); } mtl_alias_drop_pool(p); ((pool_t *)p)->magic = 0; }
 static void ft_flush(const uint8_t *a, uint64_t n);
 NVN(nvnMemoryPoolFlushMappedRange, void, const NVNmemoryPool *p, ptrdiff_t off, size_t n) {   // see ft_add and nvn_flushed
     const pool_t *o = (const pool_t *)p;
+#if DM_GAME_NVN2
+    if (o->magic!=MAGIC('P','O','O','L') || off<0 || (uint64_t)off>o->size || n>o->size-(uint64_t)off)
+        die("[RED] NVN2 memory pool flush range exceeds its initialized storage");
+    if (o->flags&0x300) {
+        if (!nvn2_pool_flush(o,(uint64_t)off,n)) die("[RED] NVN2 pool flush requires a live canonical physical range");
+        return;
+    }
+#endif
     if (!o->mem) return;
+#if DM_GAME_NVN2
+    if (n && (o->flags&0x200)) die("[RED] NVN2 virtual flush requires audited alias publication");
+#endif
     if (!(o->flags & 0x200)) fl_add(o->mem + off, n);
-    ft_flush(o->mem + off, n);
+#if DM_GAME_NVN2
+    if (o->gpu_mem) ft_flush(o->mem+off,n);
+#else
+    ft_flush(o->mem+off,n);
+#endif
 }
-NVN(nvnMemoryPoolGetBufferAddress, NVNbufferAddress, const NVNmemoryPool *p) { return (NVNbufferAddress)((const pool_t *)p)->mem; }
+NVN(nvnMemoryPoolGetBufferAddress, NVNbufferAddress, const NVNmemoryPool *p) {
+#if DM_GAME_NVN2
+    return (NVNbufferAddress)((const pool_t *)p)->gpu_mem;
+#else
+    return (NVNbufferAddress)((const pool_t *)p)->mem;
+#endif
+}
 
 // ---------- Descriptor pools ----------
 // One ID space per pool. In NVN a texture or sampler ID indexes the pool the command buffer has bound (SetTexturePool / SetSamplerPool), and two pools may use the same IDs. The replay keeps
@@ -425,6 +555,10 @@ static void fl_drop(const uint8_t *a, uint64_t n) {   // a pool goes: its part o
     pthread_mutex_unlock(&g_fl_mu);
 }
 int nvn_flushed(const void *p, uint64_t n) {   // whether the CPU flushed any of [p, p + n)
+#if DM_GAME_NVN2
+    int handled=0, answer=nvn2_alias_flushed((uintptr_t)p,n,&handled);
+    if (handled) return answer;
+#endif
     const uint8_t *a = p;
     pthread_mutex_lock(&g_fl_mu);
     size_t i = fl_find(a, 0); int r = i < g_nfl && g_fl[i].lo < a + n;
@@ -530,9 +664,10 @@ NVN(nvnTextureInvalidateTexels, void, const NVNtexture *t, const NVNtextureView 
 NVN(nvnSamplerBuilderSetDefaults, void, NVNsamplerBuilder *b) {
     NVNdevice *dev = ((samp_builder_t *)b)->dev; memset(b, 0, sizeof(samp_builder_t)); ((samp_builder_t *)b)->dev = dev;
     samp_par *o = SB(b);
-    o->minf = NVN_MIN_FILTER_NEAREST_MIPMAP_LINEAR; o->magf = NVN_MAG_FILTER_LINEAR;   // GL defaults
+    o->minf = DM_GAME_NVN2 ? NVN_MIN_FILTER_LINEAR : NVN_MIN_FILTER_NEAREST_MIPMAP_LINEAR;
+    o->magf = NVN_MAG_FILTER_LINEAR;
     o->ws = o->wt = o->wr = NVN_WRAP_MODE_REPEAT; o->cmp_func = NVN_COMPARE_FUNC_LESS;
-    o->lod_min = -1000.f; o->lod_max = 1000.f; o->aniso = 1.f;
+    o->lod_min = DM_GAME_NVN2 ? 0.f : -1000.f; o->lod_max = 1000.f; o->aniso = 1.f;
 }
 NVN(nvnSamplerBuilderSetDevice, void, NVNsamplerBuilder *b, NVNdevice *d) { ((samp_builder_t *)b)->dev = d; }
 NVN(nvnSamplerBuilderSetMinMagFilter, void, NVNsamplerBuilder *b, NVNminFilter mi, NVNmagFilter ma) { SB(b)->minf = mi; SB(b)->magf = ma; }
@@ -542,7 +677,14 @@ NVN(nvnSamplerBuilderSetLodBias, void, NVNsamplerBuilder *b, float v) { SB(b)->l
 NVN(nvnSamplerBuilderSetCompare, void, NVNsamplerBuilder *b, NVNcompareMode m, NVNcompareFunc f) { SB(b)->cmp_mode = m; SB(b)->cmp_func = f; }
 NVN(nvnSamplerBuilderSetBorderColor, void, NVNsamplerBuilder *b, const float *c) { memcpy(SB(b)->border, c, 16); }
 NVN(nvnSamplerBuilderSetMaxAnisotropy, void, NVNsamplerBuilder *b, float v) { SB(b)->aniso = v; }
-NVN(nvnSamplerBuilderSetLodSnap, void, NVNsamplerBuilder *b, float v) { (void)b; (void)v; }   // No Metal equivalent, ignored
+NVN(nvnSamplerBuilderSetLodSnap, void, NVNsamplerBuilder *b, float v) {
+#if DM_GAME_NVN2
+    if (v != 0.f) die("[RED] NVN2 nonzero sampler LOD snap has no Metal implementation");
+    SB(b)->lod_snap = v;
+#else
+    (void)b; (void)v; // No Metal equivalent in the inherited NVN path.
+#endif
+}
 NVN(nvnSamplerBuilderGetMinMagFilter, void, const NVNsamplerBuilder *b, NVNminFilter *mi, NVNmagFilter *ma) {
     const samp_par *o = &((const samp_builder_t *)b)->p; *mi = (NVNminFilter)o->minf; *ma = (NVNmagFilter)o->magf;
 }
@@ -553,7 +695,11 @@ NVN(nvnSamplerBuilderGetLodClamp, void, const NVNsamplerBuilder *b, float *lo, f
     const samp_par *o = &((const samp_builder_t *)b)->p; *lo = o->lod_min; *hi = o->lod_max;
 }
 NVN(nvnSamplerInitialize, NVNboolean, NVNsampler *s, const NVNsamplerBuilder *b) {
-    samp_t *o = (samp_t *)s; o->magic = MAGIC('S', 'M', 'P', 0); o->p = ((const samp_builder_t *)b)->p; return 1;
+    samp_t *o = (samp_t *)s;
+#if DM_GAME_NVN2
+    memset(o, 0, sizeof *o); o->dev = ((const samp_builder_t *)b)->dev;
+#endif
+    o->magic = MAGIC('S', 'M', 'P', 0); o->p = ((const samp_builder_t *)b)->p; return 1;
 }
 NVN(nvnSamplerFinalize, void, NVNsampler *s) { ((samp_t *)s)->magic = 0; }
 
@@ -564,9 +710,21 @@ NVN(nvnProgramInitialize, NVNboolean, NVNprogram *p, NVNdevice *d) {
 static void pk_drop(const void *p);
 NVN(nvnProgramFinalize, void, NVNprogram *p) { mtl_prog_release((prog_t *)p); ((prog_t *)p)->magic = 0; pk_drop(p); }
 // a program's per-stage keys (side table: guest NVNprogram address → host object; bit i of ok = stage i computed)
-typedef struct { uint8_t key[6][8]; uint8_t ok; } prog_keys_t;
+typedef struct { uint8_t key[6][8]; uint8_t ok;
+#if DM_GAME_NVN2
+    uint8_t stage[6];
+#endif
+} prog_keys_t;
+static const void *pk_identity(const void *p) {
+#if DM_GAME_NVN2
+    return (const void *)(uintptr_t)((const prog_t *)p)->serial;
+#else
+    return p;
+#endif
+}
 static pthread_mutex_t g_pk_mu = PTHREAD_MUTEX_INITIALIZER; static CFMutableDictionaryRef g_pk;   // a dedicated table (keys not shared with other side tables)
 static prog_keys_t *pk_get(const void *p, int make) {
+    p=pk_identity(p);
     pthread_mutex_lock(&g_pk_mu);
     if (!g_pk) g_pk = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
     prog_keys_t *k = (prog_keys_t *)CFDictionaryGetValue(g_pk, p);
@@ -575,6 +733,7 @@ static prog_keys_t *pk_get(const void *p, int make) {
     return k;
 }
 static void pk_drop(const void *p) {
+    p=pk_identity(p);
     pthread_mutex_lock(&g_pk_mu);
     prog_keys_t *k = g_pk ? (prog_keys_t *)CFDictionaryGetValue(g_pk, p) : NULL;
     if (k) { CFDictionaryRemoveValue(g_pk, p); free(k); }
@@ -582,6 +741,9 @@ static void pk_drop(const void *p) {
 }
 // mapped = 1: computed only when the code area is in a registered memory pool (at SetShaders: Mario sets some programs with an unmapped address first and fills it in before the first draw)
 static int keys_hash(const NVNshaderData *sd, int mapped, uint8_t out[8]) {
+#if DM_GAME_NVN2
+    die("[RED] NVN2 shader metadata was not captured by the audited program adapter");
+#endif
     uint32_t ncode = 0; void *mb; uint64_t mo;
     if (!sd->control) return 0;
     memcpy(&ncode, (const uint8_t *)sd->control + 0x704, 4);
@@ -602,6 +764,14 @@ int prog_key(const prog_t *p, unsigned st, uint8_t key[8]) {
     if (!(k->ok >> st & 1)) { keys_hash(&p->sd[st], 0, k->key[st]); k->ok |= (uint8_t)(1u << st); }
     memcpy(key, k->key[st], 8);
     return 1;
+}
+int nvn2_program_stage(const prog_t *p, unsigned index) {
+#if DM_GAME_NVN2
+    prog_keys_t *metadata=pk_get(p,0);
+    return metadata && index<6 && (metadata->ok&(1u<<index)) ? metadata->stage[index] : -1;
+#else
+    (void)p; (void)index; return -1;
+#endif
 }
 NVN(nvnProgramSetShaders, NVNboolean, NVNprogram *p, int n, const NVNshaderData *sd) {
     prog_t *o = (prog_t *)p;
@@ -645,35 +815,147 @@ NVN(nvnEventBuilderSetDefaults, void, NVNeventBuilder *b) { memset(b, 0, sizeof(
 NVN(nvnEventBuilderSetStorage, void, NVNeventBuilder *b, const NVNmemoryPool *p, int64_t off) { *(ev_builder_t *)b = (ev_builder_t){(const pool_t *)p, off}; }
 NVN(nvnEventInitialize, NVNboolean, NVNevent *e, const NVNeventBuilder *b) {
     const ev_builder_t *s = (const ev_builder_t *)b;
+#if DM_GAME_NVN2
+    ev_t *out=(ev_t *)e; memset(out,0,sizeof *out);
+    if (!s->pool || s->pool->magic!=MAGIC('P','O','O','L') || !s->pool->gpu_mem || s->off<0 || (s->off&3) ||
+        (uint64_t)s->off>s->pool->size || s->pool->size-(uint64_t)s->off<4 || (!(s->pool->flags&1) && !s->pool->mem)) {
+        LOG("[RED] NVN2 EventInitialize requires an aligned backed four-byte pool range"); return 0;
+    }
+    *out=(ev_t){.address=(uint64_t)(uintptr_t)(s->pool->gpu_mem+s->off),
+        .val=(s->pool->flags&1)?NULL:(volatile uint32_t *)(s->pool->mem+s->off),
+        .pool=s->pool,.off=s->off,.magic=MAGIC('E','V','N','T')};
+    return 1;
+#else
     if (!s->pool || !s->pool->mem) { LOG("[RED] EventInitialize has no storage"); return 0; }
     *(ev_t *)e = (ev_t){MAGIC('E', 'V', 'N', 'T'), (volatile uint32_t *)(s->pool->mem + s->off)}; return 1;
+#endif
 }
 NVN(nvnEventFinalize, void, NVNevent *e) { ((ev_t *)e)->magic = 0; }
-NVN(nvnEventGetValue, uint32_t, const NVNevent *e) { return *((const ev_t *)e)->val; }
-static void ev_signal(const ev_t *e, int mode, uint32_t v) { if (mode == NVN_EVENT_SIGNAL_MODE_ADD) *e->val += v; else *e->val = v; }
+#if DM_GAME_NVN2
+static void nvn2_event_cpu_require(const ev_t *event) {
+    if (!event || event->magic!=MAGIC('E','V','N','T') || !event->pool || event->pool->magic!=MAGIC('P','O','O','L') ||
+        !event->val || (event->pool->flags&1) || event->off<0 || (uint64_t)event->off>event->pool->size ||
+        event->pool->size-(uint64_t)event->off<4 || event->val!=(volatile uint32_t *)(event->pool->mem+event->off))
+        die("[RED] NVN2 CPU event access requires its live CPU-accessible pool range");
+}
+NVN_NOPROTO(nvnEventBuilderGetStorage,const NVNmemoryPool *,const NVNeventBuilder *b,int64_t *offset) {
+    const ev_builder_t *builder=(const ev_builder_t *)b; *offset=builder->off; return (const NVNmemoryPool *)builder->pool;
+}
+NVN_NOPROTO(nvnEventBuilderGetMemoryPool,const NVNmemoryPool *,const NVNeventBuilder *b) { return (const NVNmemoryPool *)((const ev_builder_t *)b)->pool; }
+NVN_NOPROTO(nvnEventBuilderGetMemoryOffset,int64_t,const NVNeventBuilder *b) { return ((const ev_builder_t *)b)->off; }
+NVN_NOPROTO(nvnEventGetMemoryPool,const NVNmemoryPool *,const NVNevent *e) { return (const NVNmemoryPool *)((const ev_t *)e)->pool; }
+NVN_NOPROTO(nvnEventGetMemoryOffset,int64_t,const NVNevent *e) { return ((const ev_t *)e)->off; }
+#endif
+NVN(nvnEventGetValue, uint32_t, const NVNevent *e) {
+#if DM_GAME_NVN2
+    nvn2_event_cpu_require((const ev_t *)e);
+    return atomic_load_explicit((const _Atomic uint32_t *)((const ev_t *)e)->val,memory_order_acquire);
+#else
+    return *((const ev_t *)e)->val;
+#endif
+}
+static void ev_signal(const ev_t *e, int mode, uint32_t v) {
+#if DM_GAME_NVN2
+    nvn2_event_cpu_require(e);
+    if (mode!=NVN_EVENT_SIGNAL_MODE_ADD && mode!=NVN_EVENT_SIGNAL_MODE_WRITE) die("[RED] NVN2 unknown CPU event signal mode%d",mode);
+    if (mode==NVN_EVENT_SIGNAL_MODE_ADD) atomic_fetch_add_explicit((_Atomic uint32_t *)e->val,v,memory_order_release);
+    else atomic_store_explicit((_Atomic uint32_t *)e->val,v,memory_order_release);
+#else
+    if (mode == NVN_EVENT_SIGNAL_MODE_ADD) *e->val += v; else *e->val = v;
+#endif
+}
 NVN(nvnEventSignal, void, NVNevent *e, NVNeventSignalMode m, uint32_t v) { ev_signal((const ev_t *)e, m, v); }
 
 // ---------- Queue ----------
 #define QB(b) ((queue_builder_t *)(b))
 NVN(nvnQueueBuilderSetDefaults, void, NVNqueueBuilder *b) {
+#if DM_GAME_NVN2
+    queue_builder_t *o = QB(b);
+    o->mem = NULL; o->primary = NULL; o->flags = 0;
+    o->has_cmd = o->has_comp = o->has_ctl = o->has_rt = o->has_flush = 0;
+    o->cmd_sz = o->comp_sz = o->ctl_sz = o->rt_sz = o->mem_sz = o->flush = 0;
+    o->priority = 100;
+#else
     NVNdevice *dev = QB(b)->dev; memset(b, 0, sizeof(queue_builder_t)); QB(b)->dev = dev;
     QB(b)->cmd_sz = 65536; QB(b)->comp_sz = 262144; QB(b)->ctl_sz = 16384; QB(b)->flush = 4096;   // Device defaults
+#endif
 }
 NVN(nvnQueueBuilderSetDevice, void, NVNqueueBuilder *b, NVNdevice *d) { QB(b)->dev = d; }
+#if DM_GAME_NVN2
+NVN_NOPROTO(nvnQueueBuilderSetPrimaryQueue,void,NVNqueueBuilder *builder,const NVNqueue *primary) {
+    QB(builder)->primary=(NVNqueue *)primary;
+}
+static int nvn2_queue_primary_valid(const queue_t *queue,const queue_t *primary,NVNdevice *device) {
+    return !primary || (primary!=queue && nvn2_readable_extent(primary)>=sizeof *primary &&
+        primary->magic==MAGIC('Q','U','E','U') && primary->dev==device && !primary->primary);
+}
+#endif
 NVN(nvnQueueBuilderSetFlags, void, NVNqueueBuilder *b, int f) { QB(b)->flags = f; }
-NVN(nvnQueueBuilderSetCommandMemorySize, void, NVNqueueBuilder *b, size_t n) { QB(b)->cmd_sz = n; }
-NVN(nvnQueueBuilderSetComputeMemorySize, void, NVNqueueBuilder *b, size_t n) { QB(b)->comp_sz = n; }
-NVN(nvnQueueBuilderSetControlMemorySize, void, NVNqueueBuilder *b, size_t n) { QB(b)->ctl_sz = n; }
-NVN(nvnQueueBuilderSetCommandFlushThreshold, void, NVNqueueBuilder *b, size_t n) { QB(b)->flush = n; }
+NVN(nvnQueueBuilderSetCommandMemorySize, void, NVNqueueBuilder *b, size_t n) {
+#if DM_GAME_NVN2
+    if (n > UINT32_MAX) die("[RED] NVN2 queue command allocation exceeds the builder field");
+    QB(b)->has_cmd = 1;
+#endif
+    QB(b)->cmd_sz = n;
+}
+NVN(nvnQueueBuilderSetComputeMemorySize, void, NVNqueueBuilder *b, size_t n) {
+#if DM_GAME_NVN2
+    if (n > UINT32_MAX) die("[RED] NVN2 queue compute allocation exceeds the builder field");
+    QB(b)->has_comp = 1;
+#endif
+    QB(b)->comp_sz = n;
+}
+NVN(nvnQueueBuilderSetControlMemorySize, void, NVNqueueBuilder *b, size_t n) {
+#if DM_GAME_NVN2
+    if (n > UINT32_MAX) die("[RED] NVN2 queue control allocation exceeds the builder field");
+    QB(b)->has_ctl = 1;
+#endif
+    QB(b)->ctl_sz = n;
+}
+NVN(nvnQueueBuilderSetCommandFlushThreshold, void, NVNqueueBuilder *b, size_t n) {
+#if DM_GAME_NVN2
+    if (n > UINT32_MAX) die("[RED] NVN2 queue flush threshold exceeds the builder field");
+    QB(b)->has_flush = 1;
+#endif
+    QB(b)->flush = n;
+}
 // Queue memory: the sum of the command + compute + control blocks rounded to 4 KiB (the host does not use it; the game only needs to allocate this size)
 NVN(nvnQueueBuilderGetQueueMemorySize, size_t, const NVNqueueBuilder *b) {
     const queue_builder_t *o = (const queue_builder_t *)b;
+#if DM_GAME_NVN2
+    // Host allocation budget, not the console driver's private object size.
+    // An explicit zero and an unspecified default are different NVN2 values.
+    uint64_t cmd = o->has_cmd ? o->cmd_sz : 65536;
+    uint64_t comp = o->has_comp ? o->comp_sz : 262144;
+    uint64_t ctl = o->has_ctl ? o->ctl_sz : 16384;
+    return (cmd + comp + ctl + 4095) & ~(uint64_t)4095;
+#else
     return (o->cmd_sz + o->comp_sz + o->ctl_sz + 4095) & ~(size_t)4095;
+#endif
 }
-NVN(nvnQueueBuilderSetQueueMemory, void, NVNqueueBuilder *b, void *m, size_t n) { QB(b)->mem = m; QB(b)->mem_sz = n; }
+NVN(nvnQueueBuilderSetQueueMemory, void, NVNqueueBuilder *b, void *m, size_t n) {
+#if DM_GAME_NVN2
+    if (n > UINT32_MAX) die("[RED] NVN2 queue storage exceeds the builder field");
+#endif
+    QB(b)->mem = m; QB(b)->mem_sz = n;
+}
 NVN(nvnQueueInitialize, NVNboolean, NVNqueue *q, const NVNqueueBuilder *b) {
-    *(queue_t *)q = (queue_t){MAGIC('Q', 'U', 'E', 'U'), ((const queue_builder_t *)b)->dev, 0};
-    OLOG("QueueInitialize %p", (void *)q); return 1;
+    const queue_builder_t *builder=(const queue_builder_t *)b;
+#if DM_GAME_NVN2
+    const queue_t *primary=(const queue_t *)builder->primary;
+    memset(q,0,sizeof(queue_t));
+    if (!nvn2_queue_primary_valid((const queue_t *)q,primary,builder->dev)) {
+        LOG("[RED] NVN2 primary queue requires a live primary on the same device"); return 0;
+    }
+    // Logical queues share actual serialized Metal replay. A child retains its
+    // primary identity/lifetime; no native private queue memory is accessed.
+    *(queue_t *)q=(queue_t){.magic=MAGIC('Q','U','E','U'),.dev=builder->dev,.primary=primary};
+    OLOG("NVN2 QueueInitialize %p primary=%p flags=%#x",(void *)q,(const void *)primary,builder->flags);
+#else
+    *(queue_t *)q=(queue_t){MAGIC('Q','U','E','U'),builder->dev,0};
+    OLOG("QueueInitialize %p",(void *)q);
+#endif
+    return 1;
 }
 NVN(nvnQueueFinalize, void, NVNqueue *q) { ((queue_t *)q)->magic = 0; }
 NVN(nvnQueueGetError, NVNqueueGetErrorResult, NVNqueue *q, NVNqueueErrorInfo *info) {
@@ -693,11 +975,23 @@ NVN(nvnQueueFinish, void, NVNqueue *q) { (void)q; mtl_finish(); }
 #define OP_RESERVE 16
 
 NVN(nvnCommandBufferInitialize, NVNboolean, NVNcommandBuffer *c, NVNdevice *d) {
-    memset(c, 0, sizeof(cmd_t)); CB(c)->magic = MAGIC('C', 'M', 'D', 'B'); CB(c)->dev = d; return 1;
+    memset(c, 0, sizeof(cmd_t)); CB(c)->magic = MAGIC('C', 'M', 'D', 'B'); CB(c)->dev = d;
+#if DM_GAME_NVN2
+    CB(c)->cb_enabled = 1;
+#endif
+    return 1;
 }
 NVN(nvnCommandBufferFinalize, void, NVNcommandBuffer *c) { CB(c)->magic = 0; }
 NVN(nvnCommandBufferSetMemoryCallback, void, NVNcommandBuffer *c, PFNNVNCOMMANDBUFFERMEMORYCALLBACKPROC cb) { CB(c)->cb = cb; }
 NVN(nvnCommandBufferSetMemoryCallbackData, void, NVNcommandBuffer *c, void *d) { CB(c)->cb_data = d; }
+#if DM_GAME_NVN2
+// The pinned compiler maps supported LDL/STL locals to per-invocation Private
+// storage. Retain the caller's optional reservation as command state, never a shader address.
+static enum nvn2_scratch_result nvn2_command_scratch_reserve(cmd_t *c, const pool_t *pool, int64_t off, uint64_t size) {
+    if (pool && pool->magic!=MAGIC('P','O','O','L')) return NVN2_SCRATCH_RANGE;
+    return nvn2_scratch_validate(pool,pool?(uintptr_t)pool->gpu_mem:0,pool?pool->size:0,off,size,&c->scratch);
+}
+#endif
 static uint8_t *align8(uint8_t *p) { return (uint8_t *)(((uintptr_t)p + 7) & ~(uintptr_t)7); }
 // Diagnostic DM_NVN_CMDSTAT=1: every 300 frames log one line of command recording usage -- how many bytes / records were recorded per frame, how large a command memory segment the game gives each time, how many out-of-memory callbacks per frame, how many host-supplied segments,
 // and the count and bytes of each command type (to find "how much larger our records are than real-device commands"). Counts only; does not change recording / replay
@@ -776,6 +1070,13 @@ static void hostseg_release(uintptr_t lo, uintptr_t hi) {
 }
 NVN(nvnCommandBufferAddCommandMemory, void, NVNcommandBuffer *c, const NVNmemoryPool *p, ptrdiff_t off, size_t n) {
     const pool_t *pl = (const pool_t *)p;
+#if DM_GAME_NVN2
+    if (!pl || pl->magic!=MAGIC('P','O','O','L') || off<0 || n<64 ||
+        (uint64_t)off>pl->size || n>pl->size-(uint64_t)off)
+        die("[RED] NVN2 command memory is outside its initialized pool");
+    if (!pl->gpu_mem || ((pl->flags&0x200) && !nvn_host_readable((uintptr_t)pl->gpu_mem+(uint64_t)off,n)))
+        die("[RED] NVN2 command memory requires a mapped GPU range");
+#endif
     if (!pl || n < 64) { if (cs_on()) { pthread_mutex_lock(&g_cs_mu); g_cs.hostseg++; pthread_mutex_unlock(&g_cs_mu); } size_t sz = hostseg_size(CB(c), !pl, n); cmd_new_segment(CB(c), hostseg_take(CB(c), sz), sz); return; }
     if (!pl->mem) { LOG("[RED] AddCommandMemory: pool has no CPU storage"); return; }
     hostseg_release((uintptr_t)(pl->mem + off), (uintptr_t)(pl->mem + off + n));
@@ -784,13 +1085,25 @@ NVN(nvnCommandBufferAddCommandMemory, void, NVNcommandBuffer *c, const NVNmemory
     cmd_new_segment(CB(c), pl->mem + off, n);
     CB(c)->used = 0;   // GetCommandMemoryUsed counts from the start of the memory the game last added, across recordings (see there)
 }
-NVN(nvnCommandBufferAddControlMemory, void, NVNcommandBuffer *c, void *m, size_t n) { (void)c; (void)m; (void)n; }
+NVN(nvnCommandBufferAddControlMemory, void, NVNcommandBuffer *c, void *m, size_t n) {
+#if DM_GAME_NVN2
+    if (!m || ((uintptr_t)m & 7) || n < 16 || n > UINTPTR_MAX-(uintptr_t)m)
+        die("[RED] NVN2 command control memory must be an aligned, nonempty range");
+    CB(c)->ctl_begin = CB(c)->ctl_cur = m; CB(c)->ctl_end = (uint8_t *)m+n;
+#else
+    (void)c; (void)m; (void)n;
+#endif
+}
 // Get space for one record and keep `keep` bytes after it (OP_RESERVE, 0 for the END); if not enough, call back into the game per the NVN convention to add command memory
 static uint8_t *cmd_alloc_keep(cmd_t *o, uint32_t size, uint32_t keep) {
     size = (size + 7) & ~7u;
     for (int tries = 0; !o->cur || o->cur + size + keep > o->end; tries++) {
         // The game's callback cannot supply enough (newer-SDK games hand out small chunks sized for real-device commands, or disable the callback and manage memory themselves): continue recording in a host segment instead of aborting
-        if (!o->cb || tries == 2) {
+        if (!o->cb || tries == 2
+#if DM_GAME_NVN2
+            || !o->cb_enabled
+#endif
+        ) {
             static int once; if (!once++) LOG("[nvn] command memory: the game's callback did not add enough (cb=%p, need %u bytes), using a host-lent segment", (void *)o->cb, size + keep);
             size_t sz = hostseg_size(o, 0, size + keep); cmd_new_segment(o, hostseg_take(o, sz), sz); break;
         }
@@ -817,7 +1130,20 @@ NVN(nvnCommandBufferEndRecording, NVNcommandHandle, NVNcommandBuffer *c) {
     cmd_t *o = CB(c);
     uint8_t *p = cmd_alloc_keep(o, 8, 0); put_hdr(p, OP_END, 8);   // nothing follows: the END may take the segment's last bytes
     o->recording = 0;
+#if DM_GAME_NVN2
+    // A host control record is a jump to the command stream. Its handle lives in
+    // the control storage supplied by the caller, with independent usage accounting.
+    if (!o->ctl_cur || (size_t)(o->ctl_end-o->ctl_cur) < 16) {
+        if (o->cb) o->cb(c, NVN_COMMAND_BUFFER_MEMORY_EVENT_OUT_OF_CONTROL_MEMORY, 256, o->cb_data);
+        if (!o->ctl_cur || (size_t)(o->ctl_end-o->ctl_cur) < 16)
+            die("[RED] NVN2 command buffer has no control memory for its handle");
+    }
+    uint8_t *control=o->ctl_cur; o->ctl_cur+=16;
+    put_hdr(control,OP_JUMP,16); memcpy(control+8,&o->begin,8);
+    return (NVNcommandHandle)control;
+#else
     return (NVNcommandHandle)o->begin;
+#endif
 }
 NVN(nvnCommandBufferIsRecording, NVNboolean, const NVNcommandBuffer *c) { return ((const cmd_t *)c)->recording != 0; }
 NVN(nvnCommandBufferCopyCommands, void, NVNcommandBuffer *c, int n, const NVNcommandHandle *h) {
@@ -1145,6 +1471,11 @@ void dm_gfx_suspend(int on) {
 // through syncs, so replaying the two queues' submissions in lock order is one valid order
 static pthread_mutex_t g_sub_mu = PTHREAD_MUTEX_INITIALIZER;
 NVN(nvnQueueSubmitCommands, void, NVNqueue *q, int n, const NVNcommandHandle *h) {
+#if DM_GAME_NVN2
+    const queue_t *queue=(const queue_t *)q;
+    if (!queue || queue->magic!=MAGIC('Q','U','E','U') || !nvn2_queue_primary_valid(queue,queue->primary,queue->dev))
+        die("[RED] NVN2 submit requires a live queue and primary association");
+#endif
     gfx_enter();
     pthread_mutex_lock(&g_sub_mu);
     uint64_t t0 = now_ns(), c0 = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID), i0, y0, s0 = thr_sys_ns(); thr_counts(&i0, &y0);
@@ -1187,13 +1518,14 @@ __attribute__((constructor)) static void nvn_nops_register(void) {
     // Empty implementations overwrite the unimplemented stubs after the slot table is initialized; a misspelled name (not in main's name table) reports a failure and aborts at startup
     nvn_init_slots();
     for (unsigned k = 0; k < sizeof g_nops / sizeof *g_nops; k++) {
+        if (DM_GAME_NVN2) continue;
         unsigned i = 0;
         while (i < NVN_NFUNC && strcmp(nvn_names[i], g_nops[k])) i++;
         if (i == NVN_NFUNC) die("NVN empty implementation %s is not in main's name table", g_nops[k]);
         if (nvn_slot[i].fn != (void *)nvn_unimpl_entry) die("NVN %s has an implementation and is also listed as an empty implementation", g_nops[k]);
         nvn_slot[i].fn = (void *)nvn_nop;
     }
-    unsigned nnop = sizeof g_nops / sizeof *g_nops;
+    unsigned nnop = DM_GAME_NVN2 ? 0 : sizeof g_nops / sizeof *g_nops;
     // Implemented functions other than command recording (nvnCommandBuffer*, tens of thousands per frame, where the host only appends records) run on the big host stack: submit / present / object creation do Metal work, and a game thread's stack may be too small (see nvn_entry.S nvn_big_entry)
     unsigned nbig = 0;
     for (unsigned i = 0; i < NVN_NFUNC; i++)
@@ -1204,8 +1536,8 @@ __attribute__((constructor)) static void nvn_nops_register(void) {
     if (getenv("DM_NVN_PROF"))
         for (unsigned i = 0; i < NVN_NFUNC; i++)
             if (nvn_slot[i].fn != (void *)nvn_unimpl_entry && strcmp(nvn_names[i], "nvnQueuePresentTexture")) { nvn_real[i] = nvn_slot[i].fn; nvn_slot[i].fn = (void *)nvn_prof_entry; }
-    LOG("[nvn] null device: %u names, %u implemented (%u semantic + %u empty, %u of them on the large host stack), the other %u go to the red-reporting stub",
-        NVN_NFUNC, g_nsem + nnop, g_nsem, nnop, nbig, NVN_NFUNC - g_nsem - nnop);
+    LOG("[nvn] %s: %u names, %u implemented (%u semantic + %u empty, %u on the host stack), %u unimplemented",
+        DM_GAME_NVN2 ? "NVN2 verified ABI" : "NVN interface", NVN_NFUNC, g_nsem + nnop, g_nsem, nnop, nbig, NVN_NFUNC - g_nsem - nnop);
 }
 
 // ---------- Window / present ----------
@@ -1825,37 +2157,87 @@ NVN(nvnQueuePresentTexture, void, NVNqueue *q, NVNwindow *w, int idx) {
 #define ONCE_LOG(...) do { static int once_; if (!once_++) LOG("[nvn] " __VA_ARGS__); } while (0)
 
 // Buffer object = pool + offset + size; the GPU address and the CPU mapping are both the pool's host pointer + offset (same convention as MemoryPoolGetBufferAddress)
-typedef struct { NVNdevice *dev; const pool_t *pool; int64_t off; uint64_t size; } buf_builder_t;   FITS(buf_builder_t, NVNbufferBuilder);
-typedef struct { uint32_t magic; const pool_t *pool; int64_t off; uint64_t size; } buf_t;             FITS(buf_t, NVNbuffer);
+#if DM_GAME_NVN2
+// Native CPU accessors expose this prefix. Initialize clears exactly 48 bytes.
+typedef struct { uint64_t reserved; NVNdevice *dev; const pool_t *pool; int64_t off; uint64_t size; } buf_builder_t;
+typedef struct { uint32_t magic, reserved; NVNdevice *dev; const pool_t *pool; int64_t off; uint64_t size, padding; } buf_t;
+_Static_assert(sizeof(buf_builder_t)==40 && sizeof(buf_t)==48 && __builtin_offsetof(buf_t,pool)==16,"NVN2 buffer ABI extent");
+#else
+typedef struct { NVNdevice *dev; const pool_t *pool; int64_t off; uint64_t size; } buf_builder_t;
+typedef struct { uint32_t magic; const pool_t *pool; int64_t off; uint64_t size; } buf_t;
+#endif
+FITS(buf_builder_t,NVNbufferBuilder); FITS(buf_t,NVNbuffer);
 #define BB(b) ((buf_builder_t *)(b))
 #define BF(b) ((const buf_t *)(b))
-NVN(nvnBufferBuilderSetDefaults, void, NVNbufferBuilder *b) { NVNdevice *d = BB(b)->dev; memset(b, 0, sizeof(buf_builder_t)); BB(b)->dev = d; }
+NVN(nvnBufferBuilderSetDefaults, void, NVNbufferBuilder *b) {
+#if DM_GAME_NVN2
+    BB(b)->pool=NULL; BB(b)->off=0; BB(b)->size=0;
+#else
+    NVNdevice *d = BB(b)->dev; memset(b, 0, sizeof(buf_builder_t)); BB(b)->dev = d;
+#endif
+}
 NVN(nvnBufferBuilderSetDevice, void, NVNbufferBuilder *b, NVNdevice *d) { BB(b)->dev = d; }
 NVN(nvnBufferBuilderSetStorage, void, NVNbufferBuilder *b, NVNmemoryPool *p, ptrdiff_t off, size_t n) { BB(b)->pool = (const pool_t *)p; BB(b)->off = off; BB(b)->size = n; }
 NVN(nvnBufferInitialize, NVNboolean, NVNbuffer *buf, const NVNbufferBuilder *b) {
     const buf_builder_t *bb = (const buf_builder_t *)b;
-    if (!bb->pool || !bb->pool->mem) { LOG("[RED] BufferInitialize: pool has no storage (pool %p flags %#x offset %#llx size %#llx)", (const void *)bb->pool, bb->pool ? bb->pool->flags : 0, (unsigned long long)bb->off, (unsigned long long)bb->size); return 0; }
+    if (!bb->pool || (!bb->pool->mem && !(DM_GAME_NVN2 && !bb->pool->size && !bb->off && !bb->size))) { LOG("[RED] BufferInitialize: pool has no storage (pool %p flags %#x offset %#llx size %#llx)", (const void *)bb->pool, bb->pool ? bb->pool->flags : 0, (unsigned long long)bb->off, (unsigned long long)bb->size); return 0; }
     // The NVN driver does not check a buffer's range against its pool, and the host's own GPU access never goes by the buffer: it takes an address and a length from the command (mtl_addr resolves it
     // in the pool's memory and reports a range that leaves the pool as its own red line). Breath of the Wild creates a 256 KB buffer over a 144 KB pool for a screen readback that feeds a
     // compressing encoder (when the pause menu opens, and near a save commit): the buffer's one use is a texture-to-buffer copy of the picture's own extent, which lies inside the pool. Not an error by itself: one line.
     if ((uint64_t)bb->off + bb->size > bb->pool->size) ONCE_LOG("BufferInitialize: a buffer reaches past the end of its pool (offset %#llx size %#llx pool %#llx); only an access that leaves the pool is an error, and it is reported where it happens", (unsigned long long)bb->off, (unsigned long long)bb->size, (unsigned long long)bb->pool->size);
+#if DM_GAME_NVN2
+    if (bb->pool->magic != MAGIC('P','O','O','L') || bb->off < 0 ||
+        (uint64_t)bb->off > bb->pool->size || bb->size > bb->pool->size-(uint64_t)bb->off)
+        die("[RED] NVN2 buffer storage is outside its initialized pool");
+    memset(buf,0,sizeof(buf_t)); ((buf_t *)buf)->dev=bb->dev;
+    buf_t *o=(buf_t *)buf; o->magic=MAGIC('B','U','F',0); o->pool=bb->pool; o->off=bb->off; o->size=bb->size;
+#else
     *(buf_t *)buf = (buf_t){MAGIC('B', 'U', 'F', 0), bb->pool, bb->off, bb->size};
+#endif
     OLOG("BufferInitialize %p pool=%p off=%#llx size=%#llx", (void *)buf, (const void *)bb->pool, (unsigned long long)bb->off, (unsigned long long)bb->size);
     return 1;
 }
 NVN(nvnBufferFinalize, void, NVNbuffer *buf) { ((buf_t *)buf)->magic = 0; }
 NVN(nvnBufferSetDebugLabel, void, NVNbuffer *buf, const char *s) { (void)buf; (void)s; }
-NVN(nvnBufferGetAddress, NVNbufferAddress, const NVNbuffer *buf) { return (NVNbufferAddress)(BF(buf)->pool->mem + BF(buf)->off); }
-NVN(nvnBufferMap, void *, const NVNbuffer *buf) { return BF(buf)->pool->mem + BF(buf)->off; }
+NVN(nvnBufferGetAddress, NVNbufferAddress, const NVNbuffer *buf) {
+#if DM_GAME_NVN2
+    return BF(buf)->pool->gpu_mem?(NVNbufferAddress)(BF(buf)->pool->gpu_mem+BF(buf)->off):0;
+#else
+    return (NVNbufferAddress)(BF(buf)->pool->mem+BF(buf)->off);
+#endif
+}
+NVN(nvnBufferMap, void *, const NVNbuffer *buf) {
+    if (DM_GAME_NVN2 && ((BF(buf)->pool->flags & 1) || !BF(buf)->pool->mem)) return NULL;
+    return BF(buf)->pool->mem + BF(buf)->off;
+}
 NVN(nvnBufferGetSize, size_t, const NVNbuffer *buf) { return (size_t)BF(buf)->size; }
 NVN(nvnBufferGetMemoryPool, NVNmemoryPool *, const NVNbuffer *buf) { return (NVNmemoryPool *)BF(buf)->pool; }
 NVN(nvnBufferGetMemoryOffset, ptrdiff_t, const NVNbuffer *buf) { return (ptrdiff_t)BF(buf)->off; }
-NVN(nvnBufferFlushMappedRange, void, const NVNbuffer *buf, ptrdiff_t off, size_t n) { (void)buf; (void)off; (void)n; }        // unified memory: nothing to flush
-NVN(nvnBufferInvalidateMappedRange, void, const NVNbuffer *buf, ptrdiff_t off, size_t n) { (void)buf; (void)off; (void)n; }
+NVN(nvnBufferFlushMappedRange, void, const NVNbuffer *buf, ptrdiff_t off, size_t n) {
+#if DM_GAME_NVN2
+    if (off<0 || (uint64_t)off>BF(buf)->size || n>BF(buf)->size-(uint64_t)off) die("[RED] NVN2 buffer flush range exceeds its storage");
+    h_nvnMemoryPoolFlushMappedRange((NVNmemoryPool *)BF(buf)->pool,BF(buf)->off+off,n);
+#else
+    (void)buf; (void)off; (void)n;
+#endif
+}
+NVN(nvnBufferInvalidateMappedRange, void, const NVNbuffer *buf, ptrdiff_t off, size_t n) {
+#if DM_GAME_NVN2
+    if (off<0 || (uint64_t)off>BF(buf)->size || n>BF(buf)->size-(uint64_t)off) die("[RED] NVN2 buffer invalidate range exceeds its storage");
+    // Shared Metal buffers use the coherent CPU cache. Submission fences govern GPU visibility.
+    atomic_thread_fence(memory_order_seq_cst);
+#else
+    (void)buf; (void)off; (void)n;
+#endif
+}
 
 // Memory pool queries
 NVN(nvnMemoryPoolGetFlags, NVNmemoryPoolFlags, const NVNmemoryPool *p) { return (NVNmemoryPoolFlags)((const pool_t *)p)->flags; }
-NVN(nvnMemoryPoolMap, void *, const NVNmemoryPool *p) { return ((const pool_t *)p)->mem; }
+NVN(nvnMemoryPoolMap, void *, const NVNmemoryPool *p) {
+    const pool_t *o = (const pool_t *)p;
+    if (DM_GAME_NVN2 && (o->flags & 1)) return NULL; // CPU_NO_ACCESS has no public CPU mapping.
+    return o->mem;
+}
 NVN(nvnMemoryPoolGetSize, size_t, const NVNmemoryPool *p) { return (size_t)((const pool_t *)p)->size; }
 NVN(nvnMemoryPoolInvalidateMappedRange, void, const NVNmemoryPool *p, ptrdiff_t off, size_t n) { (void)p; (void)off; (void)n; }
 NVN(nvnMemoryPoolSetDebugLabel, void, NVNmemoryPool *p, const char *s) { (void)p; (void)s; }
@@ -1872,6 +2254,9 @@ NVN(nvnCommandBufferSetDebugLabel, void, NVNcommandBuffer *c, const char *s) { (
 //   Inconsistent mappings (true sparse) are not implemented: reported red, returns failure. It used to always fail: the game treated the pool as unusable, a buffer later carved from it got a null pool, and MemoryPoolGetFlags read NULL+4 and crashed
 typedef struct { NVNmemoryPool *phys; int64_t poff, voff; uint64_t size; int32_t storage_class, _pad; } map_req;
 _Static_assert(sizeof(map_req) == 0x28, "NVNmappingRequest");
+#if DM_GAME_NVN2
+static enum nvn2_alias_result nvn2_alias_fresh(pool_t *pool,int count,const map_req *request);
+#endif
 // True sparse virtual pools (Monster Hunter Rise: RE Engine's GPU heap is one 64 GB virtual pool, built from separately allocated 4 MB physical pools mapped at offsets of their own; boot maps 45 of them
 // over the first 180 MB). A virtual pool larger than the whole application pool cannot be one alias of a physical pool, so at Initialize it gets an address range of its own (reserved, inaccessible),
 // and every mapping request vm_remaps the physical pool's pages over its part of that range: the virtual addresses then read and write the same memory as the physical pool, as the GPU page table does
@@ -1884,11 +2269,28 @@ _Static_assert(sizeof(map_req) == 0x28, "NVNmappingRequest");
 // its sparse textures (flag 0x20, 32 GB into the pool) that way: it writes the tiles on the CPU into 4 MB physical pools, then maps them; no GPU copy writes them
 enum { NVPOOL = 4, NVRUN = 1024, VPT_LEAF = 512 };   // a page-table leaf covers 2 MB
 typedef struct { const uint8_t *phys; uint64_t gen; } vpte;
-static struct vpool { const pool_t *pool; uint8_t *base; uint64_t len, size, top; int nrun; struct { uint64_t lo, hi; } run[NVRUN]; vpte **pt; } g_vp[NVPOOL];   // len: reserved; size: the pool's; top: highest mapped end so far (logged per 128 MB)
+static struct vpool { const pool_t *pool; uint8_t *base; uint64_t len, size, top; int nrun; struct { uint64_t lo, hi; } run[NVRUN]; vpte **pt;
+#if DM_GAME_NVN2
+    nvn2_alias_lease *n2;
+#endif
+} g_vp[NVPOOL];   // len: reserved; size: the pool's; top: highest mapped end so far (logged per 128 MB)
 static pthread_mutex_t g_vp_mu = PTHREAD_MUTEX_INITIALIZER;
 static _Atomic uint64_t g_vp_gen;   // bumped per mapping request
 static struct vpool *vpool_of(const pool_t *o) { for (int i = 0; i < NVPOOL; i++) if (g_vp[i].pool == o && g_vp[i].base) return &g_vp[i]; return NULL; }
 static uint8_t *vpool_reserve(const pool_t *o) {   // → the reserved range, or NULL for a pool that keeps the alias
+#if DM_GAME_NVN2
+    if (!(o->flags&0x200) || !o->size || (o->size&65535) || o->size>(64ull<<30)) return NULL;
+    uint64_t len=o->size;
+    void *raw=mmap(NULL,len+65536,PROT_NONE,MAP_ANON|MAP_PRIVATE,-1,0);
+    void *a=MAP_FAILED;
+    if (raw!=MAP_FAILED) {
+        uintptr_t base=((uintptr_t)raw+65535)&~(uintptr_t)65535;
+        size_t prefix=base-(uintptr_t)raw,suffix=65536-prefix;
+        if (prefix) munmap(raw,prefix);
+        if (suffix) munmap((void *)(base+len),suffix);
+        a=(void *)base;
+    }
+#else
     if (!(o->flags & 0x200) || o->size <= DM_GAME_APP_POOL) return NULL;
 #if TARGET_OS_IPHONE   // 1 GB: Monster Hunter Rise's buffers stay under 0x20100000 through its opening, its textures (32 GB in) are read through the page table, and 4 GB guest + 1 GB stays near the 5 GB proven on a phone
     uint64_t len = o->size < (1ull << 30) ? o->size : 1ull << 30;
@@ -1896,6 +2298,7 @@ static uint8_t *vpool_reserve(const pool_t *o) {   // → the reserved range, or
     uint64_t len = o->size < (64ull << 30) ? o->size : 64ull << 30;
 #endif
     void *a = mmap(NULL, len, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
+#endif
     if (a == MAP_FAILED) { LOG("[RED] virtual pool %p: cannot reserve %#llx bytes of address space (errno %d)", (const void *)o, (unsigned long long)len, errno); return NULL; }
     pthread_mutex_lock(&g_vp_mu);
     int i = 0; while (i < NVPOOL && g_vp[i].base) i++;
@@ -1903,10 +2306,18 @@ static uint8_t *vpool_reserve(const pool_t *o) {   // → the reserved range, or
     g_vp[i].pool = o; g_vp[i].base = a; g_vp[i].len = len; g_vp[i].size = o->size; g_vp[i].nrun = 0;
     if (!(g_vp[i].pt = calloc((o->size + (2u << 20) - 1) >> 21, sizeof *g_vp[i].pt))) die("sparse pool page table allocation failed");
     pthread_mutex_unlock(&g_vp_mu);
+#if DM_GAME_NVN2
+    LOG("[nvn] virtual pool %p (%#llx bytes, flags %#x): reserved inaccessible address range %p+%#llx; no mapped pages",
+        (const void *)o,(unsigned long long)o->size,o->flags,a,(unsigned long long)len);
+#else
     LOG("[nvn] virtual pool %p (%#llx bytes, flags %#x): sparse, own address range %p+%#llx, physical pages are remapped into it", (const void *)o, (unsigned long long)o->size, o->flags, a, (unsigned long long)len);
+#endif
     return a;
 }
 static void vpool_release(const pool_t *o) {
+#if DM_GAME_NVN2
+    nvn2_virtual_close(o); return;
+#endif
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_of(o);
     if (v) { for (int k = 0; k < v->nrun; k++) mtl_pool_del(v->base + v->run[k].lo); munmap(v->base, v->len);
         for (uint64_t l = 0; l < (v->size + (2u << 20) - 1) >> 21; l++) free(v->pt[l]);
@@ -1970,6 +2381,23 @@ static int vpool_map(struct vpool *v, const map_req *r) {   // caller holds g_vp
     return 1;
 }
 NVN(nvnMemoryPoolMapVirtual, NVNboolean, NVNmemoryPool *p, int n, const NVNmappingRequest *rq) {
+#if DM_GAME_NVN2
+    if (n!=1) die("[RED] NVN2 MapVirtual contract unsupported: exactly one mapping request required (count=%d)",n);
+    if (nvn2_readable_extent(rq)<sizeof(map_req)) {
+        LOG("[RED] NVN2 MapVirtual mapping request is not readable"); return 0;
+    }
+    map_req request; memcpy(&request,rq,sizeof request);
+    enum nvn2_alias_result result=nvn2_alias_fresh((pool_t *)p,n,&request);
+    if (result==NVN2_ALIAS_UNSUPPORTED)
+        die("[RED] NVN2 MapVirtual contract unsupported: physical=%p physicalOffset=%#llx virtual=%p virtualOffset=%#llx size=%#llx class=%#x: %s",
+            (void *)request.phys,(unsigned long long)request.poff,(void *)p,(unsigned long long)request.voff,
+            (unsigned long long)request.size,(unsigned)request.storage_class,nvn2_alias_error(result));
+    if (result!=NVN2_ALIAS_OK) LOG("[RED] NVN2 MapVirtual refused: %s",nvn2_alias_error(result));
+    else LOG("[nvn] NVN2 fresh buffer alias %p + %#llx -> %p + %#llx, %#llx bytes class=%#x: OS + Metal view live",
+        (void *)request.phys,(unsigned long long)request.poff,(void *)p,(unsigned long long)request.voff,
+        (unsigned long long)request.size,(unsigned)request.storage_class);
+    return result==NVN2_ALIAS_OK;
+#else
     pool_t *o = (pool_t *)p; const map_req *r = (const map_req *)rq;
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_of(o); int ok = 1;
     for (int i = 0; v && i < n && ok; i++) ok = vpool_map(v, &r[i]);
@@ -1986,6 +2414,7 @@ NVN(nvnMemoryPoolMapVirtual, NVNboolean, NVNmemoryPool *p, int n, const NVNmappi
         o->mem = base;
     }
     return 1;
+#endif
 }
 
 // Samplers: the getters read the parameters in the object. Reduction (min / max of the texels a filtered sample covers) maps to the Metal 26 sampler reduction mode (nvn_mtl.m samp_by_id)
@@ -2135,7 +2564,18 @@ NVN(nvnDeviceGetTexelFetchHandle, NVNtextureHandle, const NVNdevice *d, int tex)
 NVN(nvnDeviceGetTimestampInNanoseconds, uint64_t, const NVNdevice *d, const NVNcounterData *c) { (void)d; return nvn_timestamp_to_ns(c->timestamp); }
 // Current GPU time (ns): the same clock as the counter timestamps -- the guest clock (guest_ns, nvn_mtl.m gpu_ticks)
 NVN(nvnDeviceGetCurrentTimestampInNanoseconds, uint64_t, const NVNdevice *d) { (void)d; return guest_ns(); }
-NVN(nvnDeviceRegisterFastClearColor, NVNboolean, NVNdevice *d, const float *c, NVNformat f) { (void)d; (void)c; (void)f; return 1; }
+NVN(nvnDeviceRegisterFastClearColor, NVNboolean, NVNdevice *d, const float *c, NVNformat f) {
+    (void)d; (void)c; (void)f;
+#if DM_GAME_NVN2
+    // Audited bool is table-registration availability, not a texture clear.
+    // Metal has no NVN ZBC table; report unavailable. Actual clears carry their
+    // complete values through Metal load actions / the clear pipeline.
+    ONCE_LOG("NVN2 fast-clear color registration unavailable: Metal has no NVN ZBC table");
+    return 0;
+#else
+    return 1;
+#endif
+}
 // Same as the color one: a fast clear value is only a hint to the Tegra hardware (Tears of the Kingdom registers its depth clear at startup)
 NVN(nvnDeviceRegisterFastClearDepth, NVNboolean, NVNdevice *d, float v) { (void)d; (void)v; return 1; }
 // The size of the driver's cache for shaders it compiles from intermediate code (The Great Ace Attorney Chronicles sets 10 at startup); the host compiles nothing at run time
@@ -2154,11 +2594,23 @@ NVN_NOPROTO(nvnWindowSetNumActiveTextures, void, NVNwindow *w, int n) { (void)w;
 // signals. Counted per recording, the position stayed at one frame's size (about 18 KB), the ring never freed past it, and after the first 16 MB (about 15 s) the callback waited for ring space forever
 NVN(nvnCommandBufferGetCommandMemoryUsed, size_t, const NVNcommandBuffer *c) { const cmd_t *m = (const cmd_t *)c;
     return m->begin ? (size_t)m->used : 0; }
-NVN(nvnCommandBufferGetControlMemoryUsed, size_t, const NVNcommandBuffer *c) { (void)c; return 0; }
+NVN(nvnCommandBufferGetControlMemoryUsed, size_t, const NVNcommandBuffer *c) {
+#if DM_GAME_NVN2
+    const cmd_t *o=(const cmd_t *)c; return o->ctl_cur ? (size_t)(o->ctl_cur-o->ctl_begin) : 0;
+#else
+    (void)c; return 0;
+#endif
+}
 // Size and free bytes of the command memory the game last added (DRAGON QUEST XI S, Unreal Engine 4.18): as in NVN, size = used + free; free is what is left in the current segment
 NVN(nvnCommandBufferGetCommandMemoryFree, size_t, const NVNcommandBuffer *c) { const cmd_t *m = (const cmd_t *)c; return m->cur && m->end > m->cur ? (size_t)(m->end - m->cur) : 0; }
 NVN(nvnCommandBufferGetCommandMemorySize, size_t, const NVNcommandBuffer *c) { return h_nvnCommandBufferGetCommandMemoryUsed(c) + h_nvnCommandBufferGetCommandMemoryFree(c); }
-NVN_NOPROTO(nvnCommandBufferSetCommandMemoryCallbackEnabled, void, NVNcommandBuffer *c, uint32_t on) { (void)c; (void)on; }
+NVN_NOPROTO(nvnCommandBufferSetCommandMemoryCallbackEnabled, void, NVNcommandBuffer *c, uint32_t on) {
+#if DM_GAME_NVN2
+    CB(c)->cb_enabled=(on & 0xff)!=0;
+#else
+    (void)c; (void)on;
+#endif
+}
 
 // nvnProgramSetShadersExt (NVN 55): each stage is 0x18 bytes = NVNshaderData{data, control} + one 8-byte extension field (filled from SMBW main 0x1074ff0).
 // The host identifies stages by the control section and does not use the extension field: convert to plain NVNshaderData and hand it to SetShaders.
@@ -2196,6 +2648,8 @@ NVN(nvnCommandBufferBindVertexBuffer, void, NVNcommandBuffer *c, int i, NVNbuffe
 // Draws
 NVN(nvnCommandBufferDrawElements, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, NVNindexType it, int n, NVNbufferAddress ib) { h_nvnCommandBufferDrawElementsInstanced(c, pr, it, n, ib, 0, 0, 1); }
 NVN(nvnCommandBufferDrawElementsBaseVertex, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, NVNindexType it, int n, NVNbufferAddress ib, int bv) { h_nvnCommandBufferDrawElementsInstanced(c, pr, it, n, ib, bv, 0, 1); }
+#include "nvn2_alias.inc"
+
 NVN(nvnCommandBufferDrawArraysInstanced, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, int first, int n, int bi, int inst) {
     rec_draw(c, (p_draw){pr, first, n, inst, bi});
 }
@@ -2214,10 +2668,17 @@ NVN(nvnCommandBufferMultiDrawArraysIndirectCount, void, NVNcommandBuffer *c, NVN
 }
 // Whether the host can read n bytes at a guest address: outside a sparse virtual pool always; inside one only where pages are mapped (nvn_mtl.m reads multi-draw counts there)
 int nvn_host_readable(uint64_t a, uint64_t n) {
+    if (n>UINT64_MAX-a) return 0;
     int ok = 1; pthread_mutex_lock(&g_vp_mu);
-    for (int k = 0; k < NVPOOL; k++) { struct vpool *v = &g_vp[k]; if (!v->base || a < (uint64_t)(uintptr_t)v->base || a >= (uint64_t)(uintptr_t)v->base + v->len) continue;
+    for (int k = 0; k < NVPOOL; k++) { struct vpool *v = &g_vp[k];
+#if DM_GAME_NVN2
+        if (!v->base || a+n<=(uintptr_t)v->base || a>=(uintptr_t)v->base+v->len) continue;
+        if (a<(uintptr_t)v->base) { ok=0; break; }
+#else
+        if (!v->base || a < (uint64_t)(uintptr_t)v->base || a >= (uint64_t)(uintptr_t)v->base + v->len) continue;
+#endif
         uint64_t o = a - (uint64_t)(uintptr_t)v->base; ok = 0;
-        for (int r = 0; r < v->nrun; r++) if (o >= v->run[r].lo && o + n <= v->run[r].hi) { ok = 1; break; }
+        for (int r = 0; r < v->nrun; r++) if (o >= v->run[r].lo && o <= v->run[r].hi && n <= v->run[r].hi-o) { ok = 1; break; }
         break; }
     pthread_mutex_unlock(&g_vp_mu); return ok;
 }
@@ -2241,6 +2702,12 @@ static struct vpool *vpool_at(const void *pool, uint64_t a) {
 int nvn_sparse_pool(const void *pool) { int r = 0; for (int k = 0; k < NVPOOL; k++) r |= g_vp[k].base && g_vp[k].pool == pool; return r; }   // no lock: a slot is set once at Initialize, cleared at Finalize; called per texture lookup
 uint64_t nvn_sparse_gen(void) { return atomic_load(&g_vp_gen); }
 uint64_t nvn_sparse_copy(const void *pool, void *dst, uint64_t a, uint64_t n) {
+#if DM_GAME_NVN2
+    nvn2_alias_lease *lease=NULL; const uint8_t *physical=NULL;
+    if (nvn2_alias_acquire(a,n,&lease,&physical)!=NVN2_ALIAS_OK) return n;
+    if (lease->virtual_pool!=pool) { nvn2_alias_release(lease); return n; }
+    memcpy(dst,physical,n); nvn2_alias_release(lease); return 0;
+#endif
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_at(pool, a); uint64_t miss = 0;
     if (!v) { pthread_mutex_unlock(&g_vp_mu); memset(dst, 0, n); return n; }
     for (uint64_t p = 0, o = a - (uint64_t)(uintptr_t)v->base; p < n;) {
@@ -2270,13 +2737,33 @@ static int vpt_walk(const void *pool, uint64_t a, uint64_t n, uint64_t gen, int 
 }
 static int run_written(const uint8_t *p, uint64_t n, uint64_t stamp) { return nvn_dirty_since(p, n, stamp); }
 static int run_protect(const uint8_t *p, uint64_t n, uint64_t unused) { (void)unused; nvn_dirty_protect(p, n); return 0; }
-int nvn_sparse_since(const void *pool, uint64_t a, uint64_t n, uint64_t gen, uint64_t stamp) { return vpt_walk(pool, a, n, gen, run_written, stamp); }
+int nvn_sparse_since(const void *pool, uint64_t a, uint64_t n, uint64_t gen, uint64_t stamp) {
+#if DM_GAME_NVN2
+    (void)pool; (void)gen; return nvn2_alias_since(a,n,stamp);
+#else
+    return vpt_walk(pool, a, n, gen, run_written, stamp);
+#endif
+}
 int nvn_sparse_mapped(const void *pool, uint64_t a, uint64_t n) {   // every page of [a, a+n) has memory behind it
+#if DM_GAME_NVN2
+    nvn2_alias_lease *lease=NULL; const uint8_t *physical=NULL;
+    int result=nvn2_alias_acquire(a,n,&lease,&physical)==NVN2_ALIAS_OK;
+    if (result && lease->virtual_pool!=pool) result=0;
+    nvn2_alias_release(lease); return result;
+#endif
     pthread_mutex_lock(&g_vp_mu); struct vpool *v = vpool_at(pool, a); int ok = v != NULL;
     for (uint64_t o = v ? (a - (uint64_t)(uintptr_t)v->base) & ~0xFFFull : 0, end = v ? a - (uint64_t)(uintptr_t)v->base + n : 0; ok && o < end; o += 0x1000) { const vpte *e = o < v->size ? vpt_get(v, o) : NULL; ok = e && e->phys; }
     pthread_mutex_unlock(&g_vp_mu); return ok;
 }
-void nvn_sparse_protect(const void *pool, uint64_t a, uint64_t n) { vpt_walk(pool, a, n, ~0ull, run_protect, 0); }
+void nvn_sparse_protect(const void *pool, uint64_t a, uint64_t n) {
+#if DM_GAME_NVN2
+    nvn2_alias_lease *lease=NULL; const uint8_t *physical=NULL;
+    if (nvn2_alias_acquire(a,n,&lease,&physical)==NVN2_ALIAS_OK && lease->virtual_pool==pool) nvn_dirty_protect(physical,n);
+    nvn2_alias_release(lease);
+#else
+    vpt_walk(pool, a, n, ~0ull, run_protect, 0);
+#endif
+}
 NVN(nvnCommandBufferDrawElementsIndirect, void, NVNcommandBuffer *c, NVNdrawPrimitive pr, NVNindexType it, NVNbufferAddress ib, NVNbufferAddress ind) {
     rec_draw_idx(c, (p_draw_idx){pr, it, 0, 0, 0, 1, ib, ind});
 }
@@ -2422,3 +2909,22 @@ int nvn_host_signal_sync(void *nvnsync) {
     o->fence = 0; o->fenced = 1; return 0;
 }
 NVN(nvnTextureFlushTexels, void, const NVNtexture *t, const NVNtextureView *v, const NVNcopyRegion *r) { (void)t; (void)v; (void)r; }   // unified memory + dirty page tracking: nothing to flush
+
+#include "nvn2_texture.inc"
+
+#include "nvn2_window.inc"
+
+#if DM_GAME_NVN2
+NVN(nvnCommandBufferSetShaderScratchMemory, void, NVNcommandBuffer *c, const NVNmemoryPool *pool, ptrdiff_t off, size_t size) {
+    const pool_t *p=(const pool_t *)pool;
+    if (nvn2_command_scratch_reserve(CB(c),p,off,size)!=NVN2_SCRATCH_VALID)
+        die("[RED] NVN2 shader scratch reservation has an invalid pool, range or alignment");
+    p_scratch_reservation *r=REC(c,OP_SCRATCH_RESERVATION,p_scratch_reservation);
+    r->reservation=CB(c)->scratch; r->address=size && p && p->gpu_mem ? (uintptr_t)p->gpu_mem+(uint64_t)off : 0;
+}
+#endif
+
+#include "nvn2_program.inc"
+
+#include "nvn2_vertex.inc"
+#include "nvn2_state.inc"

@@ -26,6 +26,13 @@ Implement NVN2 API interception, shader containers/reflection, Ampere translatio
 into Metal, object/layout bindings, sparse memory and fence semantics. Implement
 task/mesh geometry instead of dropping draws.
 
+In progress: the base Bananza diagnostic creates an actual Metal device and
+memory/descriptor pools, display textures/swapchain, command buffers, queues and
+two real graphics programs with matching Metal functions. The reached HID/JCMS
+and shared-memory setup is implemented. Authored GPU copy/readback validates the
+resource bridge separately. Virtual mappings and draw integration remain open;
+unsupported calls still stop explicitly. No game-generated frame exists yet.
+
 Exit evidence: a correct title/menu frame compared with the user's console.
 
 ## 4. Mac gameplay and persistence

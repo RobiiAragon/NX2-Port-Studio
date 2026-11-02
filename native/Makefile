@@ -12,9 +12,10 @@ $(BUILD_DIR)/libnx2_zbic.$(DYLIB_SUFFIX): zbic_bridge.c ../third_party/zbic-zstd
 	mkdir -p "$(BUILD_DIR)"
 	$(CC) -std=c11 -O2 -fPIC -DZSTD_ZBIC_SUPPORT=1 -I../third_party/zbic-zstd $(DYLIB_FLAG) zbic_bridge.c ../third_party/zbic-zstd/zstd.c -pthread -o "$@"
 
-$(BUILD_DIR)/nx2-ampere-lower: ampere_lower.cpp include/common/common_types.h ../third_party/eden-nx2/lower_to_maxwell.h
+$(BUILD_DIR)/nx2-ampere-lower: ampere_lower.cpp ampere_branch_compat.h include/common/common_types.h ../third_party/eglantine-nx2/lower_to_maxwell.h ../upstreams.lock.json ampere_source.py Makefile
 	mkdir -p "$(BUILD_DIR)"
-	$(CXX) $(CXXFLAGS) -Iinclude -I../third_party/eden-nx2 ampere_lower.cpp -o "$@"
+	python3 ampere_source.py --header "$(BUILD_DIR)/ampere_source_stamp.h"
+	$(CXX) $(CXXFLAGS) -include "$(BUILD_DIR)/ampere_source_stamp.h" -Iinclude -I../third_party/eglantine-nx2 ampere_lower.cpp -o "$@"
 
 clean:
 	rm -f "$(BUILD_DIR)/nx2-ampere-lower"

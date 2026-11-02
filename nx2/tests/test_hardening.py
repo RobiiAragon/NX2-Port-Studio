@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from nx2.errors import DumpError
 from nx2.formats import read_nso
@@ -49,6 +50,16 @@ class HardeningTests(unittest.TestCase):
         path = self.root / "exefs/main"
         path.write_bytes(raw)
         self.assertTrue(read_nso(path)["segments"][0]["hash_verified"])
+
+    def test_all_segment_ranges_are_checked_before_decoding(self):
+        # A later truncated segment must be diagnosed before attempting to
+        # decompress any earlier payload. The decoder must never run here.
+        raw = nso(compressed="lz4")
+        path = self.root / "exefs/main"
+        path.write_bytes(raw[:-1])
+        with patch("lz4.block.decompress", side_effect=AssertionError("decoder ran before range validation")):
+            with self.assertRaisesRegex(DumpError, "data is truncated"):
+                read_nso(path)
 
     def test_bounded_zbic_decompression_and_wrong_output_size(self):
         path = self.root / "exefs/main"

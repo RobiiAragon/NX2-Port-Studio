@@ -1,0 +1,8 @@
+# Python dependencies required by the pinned nxnative Mac dump exporter.
+# Installed only by the explicit native export preparation action, in NX2's venv.
+-r requirements-nx2.txt
+capstone>=5,<6
+fonttools
+nsz
+zbic
+zstandard

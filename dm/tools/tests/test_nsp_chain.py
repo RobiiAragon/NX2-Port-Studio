@@ -34,6 +34,8 @@ class Header(Base):
         (self.repo / 'dm/gfx/nvn').mkdir(parents=True)
         (self.repo / 'dm/gfx/tools').symlink_to(REPO / 'dm/gfx/tools'); (self.repo / 'dm/ios').symlink_to(REPO / 'dm/ios')
         (self.repo / 'dm/third_party').symlink_to(REPO / 'dm/third_party')
+        for name in ('nx2','native','third_party','upstreams.lock.json'):
+            (self.repo/name).symlink_to(REPO/name)
         self.h = self.repo / nsp.CHAIN_H
         shutil.copy(REPO / nsp.CHAIN_H, self.h)
         self.env = {k: v for k, v in os.environ.items() if k != 'DM_GAME'}   # the version needs no game

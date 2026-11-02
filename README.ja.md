@@ -1,60 +1,11 @@
-> This is inherited Switch 1 Studio documentation. For NX2 status and commands, see [NX2 Port Studio](README.md).
+# NX2 Port Studio
 
-<p align="center"><img src="docs/images/hero.ja.svg" alt="NX Port Studio — SwitchのゲームをAppleのネイティブアプリへ" width="100%"></p>
+[English](README.md) · [Español](README.es.md) · [Français](README.fr.md) · **日本語** · [简体中文](README.zh-Hans.md)
 
-<p align="center"><a href="README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.fr.md">Français</a> · <strong>日本語</strong> · <a href="README.zh-Hans.md">简体中文</a></p>
+私はApple Silicon向けのネイティブSwitch 2ツールを開発しています。**0.3.0**では、特定のコミットに固定したnxnativeを使うMacアプリ書き出しを追加しました。私の実験的NVN2バックエンドとは別の経路です。
 
-**NX Port Studioは、自分で所有するNintendo Switchのゲームファイルから、Apple向けのネイティブアプリを作成するプロジェクトです。** macOS用の作業環境で、リソースの準備、ビルド、コントローラー設定、XcodeによるiPhone/iPadアプリの署名を行えます。
+私はタイトル、更新バージョン、全モジュールのビルドIDを検証し、**Donkey Kong Bananza（458752）**と**Splatoon Raiders（65536）**の該当ビルドだけを受け付けます。上流の動作報告をNX2自身の動作確認とは扱いません。Mario Kart Worldは引き続き予定段階で、iPhone/iPad用IPAは出力しません。
 
-[seeddsのnxnative](https://github.com/seedds/nxnative)を基盤とする独立プロジェクトです。元のエンジンの作者、MITライセンス、著作権表示を保持しています。[クレジット](CREDITS.md)と[ライセンス](LICENSE)をご確認ください。
+`base/`と`updates/`を含む復号済みダンプを選択し、**Inspect dump → Prepare Mac export tools → Create Mac app**の順に進みます。更新のRomFSは差分ではなく完全な状態が必要です。保存先の初期値はApplicationsで、既存アプリは保護します。初回コンパイルには1時間ほどかかる場合があります。処理後にはその処理だけの一時ファイルを削除し、非公開ログと成功時の記録を残します。署名付きアプリの生成は、ゲームプレイの正常動作を保証するものではありません。
 
-## Studioの画面
-
-初期言語はスペイン語です。言語選択では英語、フランス語、日本語、簡体字中国語にも切り替えられます。アプリの表示言語とゲームの言語は別々に設定します。
-
-![日本語の新しい移植アプリ作成画面](docs/images/ja/studio-new-port.jpg)
-
-| システムリソース | ローカルルームの検出 |
-| :---: | :---: |
-| [![ファームウェアリソースの管理画面](docs/images/ja/studio-firmware.jpg)](docs/images/ja/studio-firmware.jpg) | [![ローカル検出ブリッジの画面](docs/images/ja/studio-local-play.jpg)](docs/images/ja/studio-local-play.jpg) |
-
-## 主な機能
-
-- ゲームごとのフォルダーに本編、更新データ、DLCをまとめ、実際のビルド進行状況を確認できます。
-- iOS向けの出力はXcodeで署名し、検証してから成功と判定します。
-- 自分の本体から取得したMiiモデル、フォント、証明書などのリソースを読み込めます。
-- OSと機器が公開している機能に応じて、ボタン割り当て、モーション、振動を利用できます。
-- ネイティブのネットワーク処理、LAN/LDNの検出、実験的なNextendo連携を実装しています。
-- iPhone/iPad上でNextendoの連携、アプリのキーチェーンへの保存、ゲームとサービスの要件確認を行う画面を備えています。
-
-変更はビルド画面に加え、Horizonソケット、HLEの待機処理、TLS検証、アカウント、Joy-Conの処理にも及びます。動作可否はゲーム、更新バージョン、端末によって異なります。
-
-## 検証状況
-
-| 項目 | 確認できたこと |
-| --- | --- |
-| Mac ↔ SwitchのLAN | 以前のMacビルドでは、実機SwitchとMario Kart 8 Deluxe 3.0.5のレースを完走しました。現在の候補ビルドではルーム作成とホストのルール画面を確認しています。 |
-| iPhone ↔ SwitchのLAN | どちらをホストにした場合も、相手がルームに参加できたとユーザーから報告されています。この組み合わせでのレース完走は未確認です。 |
-| LDN・ローカル無線 | ローカルプレイ履歴の識別情報を修正し、Mac版Mario Kart 3.0.5でホストのロビーを作成できることを確認しました。以前の実機での参加・作成は失敗しており、修正版とSwitchでの再検証が必要です。 |
-| Nextendo | OAuth、本人情報を照合したNEX資格情報の取得、署名付きカタログは検証済みです。ネイティブゲームのオンライン対戦は未検証です。 |
-| Android・Windows | Apple向けの安定化後に取り組む予定です。配布ビルドはなく、ARMとx86にはそれぞれ開発が必要です。 |
-
-LANではゲームのバージョンを揃え、同じローカルネットワークに接続してください。ネットワーク自体にインターネット接続は必須ではありません。LDNのIPブリッジには本体側の対応モジュールが必要で、ゲームに搭載されたLANモードとは別の仕組みです。
-
-2026年10月28日時点では、Nextendoのゲーム用サービスの証明書と、手元のMario Kartのバージョンが障害になっています。手元のビルドは3.0.5ですが、署名付きカタログでは4.0.1が要求されています。アカウント連携だけでは解消しません。[詳細は英語版](README.switch1.md#current-game-service-blockers)を参照してください。
-
-## はじめに
-
-StudioにはApple silicon搭載Mac、macOS 14以降、Swift 6に対応したXcodeが必要です。ゲームファイルと本体のキーは自分で用意します。現在のiOSターゲットはiOS/iPadOS 26と対応ハードウェアです。ゲームによっては、さらに新しいmacOSやMetalが必要です。
-
-リポジトリ内で次を実行します。
-
-    cd macOS/NXPortStudio
-    swift test
-    swift run NXPortStudio
-
-Studioで環境を準備し、ゲームのフォルダーとprod.keysを選び、MacまたはiPhone/iPadを指定します。iOSではXcodeのチームとペアリング済み端末を設定してください。IPAは署名と検証の完了後に成功となり、Appleのアカウントや有効期限の制約が適用されます。
-
-公開リポジトリにはソース、ツール、Studioの画面を含めます。ゲーム、本体キー、ファームウェア、アカウント情報、セーブデータ、Nintendoの画像は含めません。
-
-[英語の詳細ガイド](README.md) · [ロードマップ](ROADMAP.md) · [開発への参加](CONTRIBUTING.md)
+私はダンプ検証と開発用ワークスペースも維持しています。[書き出しガイド](docs/nx2/NATIVE_EXPORT.md)、[英語の全手順](README.md)、[固定したソース](upstreams.lock.json)、[クレジット](CREDITS.md)を参照してください。元のライセンスを保持し、ゲーム、Nintendoの素材、ファームウェア、キー、アカウント、セーブデータは公開しません。

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "reviewed_on": "2026-10-30",
-  "scope": "Repository metadata, README and source trees for 22 projects; selected source files inspected. Not execution or compatibility testing.",
+  "scope": "Repository metadata, README and source trees for 30 projects; selected source files inspected. Commit-pinned repository links identify reviewed snapshots. Live primary documents are listed separately. Not execution or compatibility testing.",
   "repositories": [
     {
       "repo": "seedds/nxnative",
-      "url": "https://github.com/seedds/nxnative",
+      "url": "https://github.com/seedds/nxnative/tree/2006d5ed8690d79ef4865a60917eb938cdb4c8dc",
       "description": "Switch games running natively on iPhone, iPad and Mac: an NSP folder becomes an unsigned IPA (NSO rewriter, Horizon HLE host, NVN\u2192Metal)",
       "commit": "2006d5ed8690d79ef4865a60917eb938cdb4c8dc",
       "date": "2026-10-30T17:05:25Z",
@@ -13,7 +13,7 @@
       "default_branch": "main",
       "files": 2440,
       "tree_truncated": false,
-      "readme_url": "https://github.com/seedds/nxnative/blob/main/README.md",
+      "readme_url": "https://github.com/seedds/nxnative/blob/2006d5ed8690d79ef4865a60917eb938cdb4c8dc/README.md",
       "interesting_paths": [
         "dm/games/010056B015FE8000/geo_mesh.tsv",
         "dm/games/0100B8E016F76000/geo_mesh.tsv",
@@ -47,7 +47,7 @@
     },
     {
       "repo": "d2r-mobile/d2r-mobile",
-      "url": "https://github.com/d2r-mobile/d2r-mobile",
+      "url": "https://github.com/d2r-mobile/d2r-mobile/tree/fb7c8e3c0f2717f5655dc8b2986427249f1715bb",
       "description": "Diablo II: Resurrected on iPhone, iPad, Apple silicon Mac, Android and HarmonyOS. Offline play with touch or a controller. One-tap Runewords, 100-level Greater Rifts and Reign of the Warlock. Native ARM, Metal and Vulkan. Open source; bring your own Switch game files. \u6697\u9ed12\u91cd\u5236\u7248.",
       "commit": "fb7c8e3c0f2717f5655dc8b2986427249f1715bb",
       "date": "2026-10-30T13:30:45Z",
@@ -55,7 +55,7 @@
       "default_branch": "main",
       "files": 2548,
       "tree_truncated": false,
-      "readme_url": "https://github.com/d2r-mobile/d2r-mobile/blob/main/.github/README.md",
+      "readme_url": "https://github.com/d2r-mobile/d2r-mobile/blob/fb7c8e3c0f2717f5655dc8b2986427249f1715bb/.github/README.md",
       "interesting_paths": [
         "dm/android/app/src/main/java/com/xiaoboluo/d2r/CamSensor.java",
         "dm/android/nso.c",
@@ -87,7 +87,7 @@
     },
     {
       "repo": "ly05010419/MacNativeGames",
-      "url": "https://github.com/ly05010419/MacNativeGames",
+      "url": "https://github.com/ly05010419/MacNativeGames/tree/933b6a0d1438de160208a0a13eb5e8d7a2cb8094",
       "description": "Play your own Tears of the Kingdom and Breath of the Wild natively on Apple silicon Mac, iPhone and iPad. Not an emulator: the game's ARM64 code runs directly, NVN rebuilt on Metal. Bring your own game.",
       "commit": "933b6a0d1438de160208a0a13eb5e8d7a2cb8094",
       "date": "2026-10-30T14:01:49Z",
@@ -95,7 +95,7 @@
       "default_branch": "main",
       "files": 5178,
       "tree_truncated": false,
-      "readme_url": "https://github.com/ly05010419/MacNativeGames/blob/main/README.md",
+      "readme_url": "https://github.com/ly05010419/MacNativeGames/blob/933b6a0d1438de160208a0a13eb5e8d7a2cb8094/README.md",
       "interesting_paths": [
         "games/acnh/runtime/romfs.c",
         "games/acnh/runtime/romfs_path.h",
@@ -129,7 +129,7 @@
     },
     {
       "repo": "iceorange-dev/manosaba-ios",
-      "url": "https://github.com/iceorange-dev/manosaba-ios",
+      "url": "https://github.com/iceorange-dev/manosaba-ios/tree/d6dbeca28e042be8ee8e43e41956bedcf4e0bdb2",
       "description": "Switch games natively on Apple silicon: Tears of the Kingdom (TotK) on iPhone and Mac, \u9b54\u6cd5\u5c11\u5973\u30ce\u9b54\u5973\u88c1\u5224 on iPhone, iPad and Mac; based on d2r-mobile",
       "commit": "d6dbeca28e042be8ee8e43e41956bedcf4e0bdb2",
       "date": "2026-10-30T14:45:06Z",
@@ -137,7 +137,7 @@
       "default_branch": "main",
       "files": 1071,
       "tree_truncated": false,
-      "readme_url": "https://github.com/iceorange-dev/manosaba-ios/blob/main/README.md",
+      "readme_url": "https://github.com/iceorange-dev/manosaba-ios/blob/d6dbeca28e042be8ee8e43e41956bedcf4e0bdb2/README.md",
       "interesting_paths": [
         "games/totk/romfs_overlay.py",
         "games/totk/tests/t_romfs_overlay.py",
@@ -157,7 +157,7 @@
     },
     {
       "repo": "shirai91/nx2android",
-      "url": "https://github.com/shirai91/nx2android",
+      "url": "https://github.com/shirai91/nx2android/tree/cd2e5d05ab679bbb801e10f548f03c20b83322e0",
       "description": "A compatibility layer for porting Switch games to Android, one game at a time",
       "commit": "cd2e5d05ab679bbb801e10f548f03c20b83322e0",
       "date": "2026-10-30T14:48:22Z",
@@ -165,7 +165,7 @@
       "default_branch": "main",
       "files": 1713,
       "tree_truncated": false,
-      "readme_url": "https://github.com/shirai91/nx2android/blob/main/README.md",
+      "readme_url": "https://github.com/shirai91/nx2android/blob/cd2e5d05ab679bbb801e10f548f03c20b83322e0/README.md",
       "interesting_paths": [
         "devtools/nso_image.py",
         "nxnative/dm/third_party/ryujinx/src/Ryujinx.Common/Helpers/ConsoleHelper.cs",
@@ -181,7 +181,7 @@
     },
     {
       "repo": "LNPANDY/NX2Apple",
-      "url": "https://github.com/LNPANDY/NX2Apple",
+      "url": "https://github.com/LNPANDY/NX2Apple/tree/7941020136b31f8b898ed0ba9dc9d91619363c4f",
       "description": "Play your own Switch games on iPhone/iPad \u2014 one-click macOS app, no terminal. | \u628a Switch \u6e38\u620f\u88c5\u8fdb iPhone\uff1a\u56fe\u5f62\u754c\u9762\u4e00\u952e\u6784\u5efa\uff0c\u4e0d\u7528\u547d\u4ee4\u884c\u3002Bring your own game.",
       "commit": "7941020136b31f8b898ed0ba9dc9d91619363c4f",
       "date": "2026-10-30T16:53:03Z",
@@ -189,7 +189,7 @@
       "default_branch": "main",
       "files": 2677,
       "tree_truncated": false,
-      "readme_url": "https://github.com/LNPANDY/NX2Apple/blob/main/README.md",
+      "readme_url": "https://github.com/LNPANDY/NX2Apple/blob/7941020136b31f8b898ed0ba9dc9d91619363c4f/README.md",
       "interesting_paths": [
         "dm/games/010056B015FE8000/geo_mesh.tsv",
         "dm/games/0100B8E016F76000/geo_mesh.tsv",
@@ -223,7 +223,7 @@
     },
     {
       "repo": "varyform/nx-native-wrapper",
-      "url": "https://github.com/varyform/nx-native-wrapper",
+      "url": "https://github.com/varyform/nx-native-wrapper/tree/bc242a3a0a471af42aa6e758d5f84c92273f757b",
       "description": "NX Play: a Mac app to build, play, install and manage Switch games with nxnative, on the Mac and on iPhone/iPad",
       "commit": "bc242a3a0a471af42aa6e758d5f84c92273f757b",
       "date": "2026-10-30T16:42:24Z",
@@ -231,7 +231,7 @@
       "default_branch": "main",
       "files": 118,
       "tree_truncated": false,
-      "readme_url": "https://github.com/varyform/nx-native-wrapper/blob/main/README.md",
+      "readme_url": "https://github.com/varyform/nx-native-wrapper/blob/bc242a3a0a471af42aa6e758d5f84c92273f757b/README.md",
       "interesting_paths": [
         "Packages/NXPlayKit/Sources/NXPlayKit/Views/ConsoleView+Banner.swift",
         "Packages/NXPlayKit/Sources/NXPlayKit/Views/ConsoleView+Carousel.swift",
@@ -247,7 +247,7 @@
     },
     {
       "repo": "Xc1Ym/LumaNX",
-      "url": "https://github.com/Xc1Ym/LumaNX",
+      "url": "https://github.com/Xc1Ym/LumaNX/tree/56c794538d02bf9a04fab0898b66f740702f25c7",
       "description": "\u7483\u6e38 LumaNX\uff1anxnative \u7b2c\u4e09\u65b9 GUI\uff0c\u56fe\u5f62\u5316\u6784\u5efa Switch \u6e38\u620f\uff0c\u652f\u6301 macOS \u8fd0\u884c\u4e0e iOS / iPadOS IPA \u5bfc\u51fa\u3002A macOS GUI for nxnative: build Switch games for Mac, iPhone and iPad.",
       "commit": "56c794538d02bf9a04fab0898b66f740702f25c7",
       "date": "2026-10-30T04:34:03Z",
@@ -255,7 +255,7 @@
       "default_branch": "main",
       "files": 2353,
       "tree_truncated": false,
-      "readme_url": "https://github.com/Xc1Ym/LumaNX/blob/main/README.md",
+      "readme_url": "https://github.com/Xc1Ym/LumaNX/blob/56c794538d02bf9a04fab0898b66f740702f25c7/README.md",
       "interesting_paths": [
         "Engine/nxnative/dm/games/010056B015FE8000/geo_mesh.tsv",
         "Engine/nxnative/dm/games/0100B8E016F76000/geo_mesh.tsv",
@@ -289,7 +289,7 @@
     },
     {
       "repo": "gr33k/switch2loader",
-      "url": "https://github.com/gr33k/switch2loader",
+      "url": "https://github.com/gr33k/switch2loader/tree/ecbef2f46dc4cb3583e8a44a019d018a238c60ed",
       "description": null,
       "commit": "ecbef2f46dc4cb3583e8a44a019d018a238c60ed",
       "date": "2026-10-23T18:51:50Z",
@@ -297,12 +297,12 @@
       "default_branch": "main",
       "files": 21,
       "tree_truncated": false,
-      "readme_url": "https://github.com/gr33k/switch2loader/blob/main/README.md",
+      "readme_url": "https://github.com/gr33k/switch2loader/blob/ecbef2f46dc4cb3583e8a44a019d018a238c60ed/README.md",
       "interesting_paths": []
     },
     {
       "repo": "0xNikilite/oboromi",
-      "url": "https://github.com/0xNikilite/oboromi",
+      "url": "https://github.com/0xNikilite/oboromi/tree/b97ea0cb32a0ef564ebf039bd8878dc344776e13",
       "description": "a proof-of-concept project for a possible Nintendo Switch 2 emulator.",
       "commit": "b97ea0cb32a0ef564ebf039bd8878dc344776e13",
       "date": "2026-10-29T04:19:46Z",
@@ -310,7 +310,7 @@
       "default_branch": "main",
       "files": 61,
       "tree_truncated": false,
-      "readme_url": "https://github.com/0xNikilite/oboromi/blob/main/README.md",
+      "readme_url": "https://github.com/0xNikilite/oboromi/blob/b97ea0cb32a0ef564ebf039bd8878dc344776e13/README.md",
       "interesting_paths": [
         "core/src/gpu/sm86.rs",
         "core/src/gpu/sm86_decoder_generated.rs",
@@ -319,7 +319,7 @@
     },
     {
       "repo": "Denisbgpro/oboromi",
-      "url": "https://github.com/Denisbgpro/oboromi",
+      "url": "https://github.com/Denisbgpro/oboromi/tree/ec00242f5c00235c6a5610825d26e4f2017498cd",
       "description": "Switch 2 proof-of-concept emulator.",
       "commit": "ec00242f5c00235c6a5610825d26e4f2017498cd",
       "date": "2025-06-19T17:05:21Z",
@@ -327,12 +327,12 @@
       "default_branch": "main",
       "files": 30,
       "tree_truncated": false,
-      "readme_url": "https://github.com/Denisbgpro/oboromi/blob/main/README.md",
+      "readme_url": "https://github.com/Denisbgpro/oboromi/blob/ec00242f5c00235c6a5610825d26e4f2017498cd/README.md",
       "interesting_paths": []
     },
     {
       "repo": "Atmosphere-NX/Atmosphere",
-      "url": "https://github.com/Atmosphere-NX/Atmosphere",
+      "url": "https://github.com/Atmosphere-NX/Atmosphere/tree/6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8",
       "description": "Atmosph\u00e8re is a work-in-progress customized firmware for the Nintendo Switch.",
       "commit": "6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8",
       "date": "2026-10-15T23:17:09Z",
@@ -340,7 +340,7 @@
       "default_branch": "master",
       "files": 3984,
       "tree_truncated": false,
-      "readme_url": "https://github.com/Atmosphere-NX/Atmosphere/blob/master/README.md",
+      "readme_url": "https://github.com/Atmosphere-NX/Atmosphere/blob/6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8/README.md",
       "interesting_paths": [
         "libraries/libmesosphere/source/svc/kern_svc_info.cpp",
         "libraries/libstratosphere/include/stratosphere/fs/fs_romfs_filesystem.hpp",
@@ -369,7 +369,7 @@
     },
     {
       "repo": "switchbrew/libnx",
-      "url": "https://github.com/switchbrew/libnx",
+      "url": "https://github.com/switchbrew/libnx/tree/b156b4774fb2df7b93402169509266da7547fc4c",
       "description": "Library for Switch Homebrew",
       "commit": "b156b4774fb2df7b93402169509266da7547fc4c",
       "date": "2026-10-19T19:10:36Z",
@@ -377,7 +377,7 @@
       "default_branch": "master",
       "files": 413,
       "tree_truncated": false,
-      "readme_url": "https://github.com/switchbrew/libnx/blob/master/README.md",
+      "readme_url": "https://github.com/switchbrew/libnx/blob/b156b4774fb2df7b93402169509266da7547fc4c/README.md",
       "interesting_paths": [
         "nx/include/switch/runtime/devices/console.h",
         "nx/include/switch/runtime/devices/romfs_dev.h",
@@ -389,7 +389,7 @@
     },
     {
       "repo": "DarkMatterCore/nxdumptool",
-      "url": "https://github.com/DarkMatterCore/nxdumptool",
+      "url": "https://github.com/DarkMatterCore/nxdumptool/tree/5ca8cd5e491fb0d7c196b06e7ceeee5c0dcc6a26",
       "description": "Generates XCI/NSP/HFS0/ExeFS/RomFS/Certificate/Ticket dumps from Nintendo Switch gamecards and installed SD/eMMC titles.",
       "commit": "5ca8cd5e491fb0d7c196b06e7ceeee5c0dcc6a26",
       "date": "2026-10-22T21:19:24Z",
@@ -397,7 +397,7 @@
       "default_branch": "rewrite",
       "files": 188,
       "tree_truncated": false,
-      "readme_url": "https://github.com/DarkMatterCore/nxdumptool/blob/rewrite/README.md",
+      "readme_url": "https://github.com/DarkMatterCore/nxdumptool/blob/5ca8cd5e491fb0d7c196b06e7ceeee5c0dcc6a26/README.md",
       "interesting_paths": [
         "include/core/npdm.h",
         "include/core/nso.h",
@@ -427,7 +427,7 @@
     },
     {
       "repo": "devkitPro/deko3d",
-      "url": "https://github.com/devkitPro/deko3d",
+      "url": "https://github.com/devkitPro/deko3d/tree/373bfd43d8b2d805fa2eb7d406dbb823032df958",
       "description": "Homebrew low level graphics API for Nintendo Switch (Nvidia Tegra X1)",
       "commit": "373bfd43d8b2d805fa2eb7d406dbb823032df958",
       "date": "2026-10-17T18:30:48Z",
@@ -435,12 +435,12 @@
       "default_branch": "master",
       "files": 74,
       "tree_truncated": false,
-      "readme_url": "https://github.com/devkitPro/deko3d/blob/master/README.md",
+      "readme_url": "https://github.com/devkitPro/deko3d/blob/373bfd43d8b2d805fa2eb7d406dbb823032df958/README.md",
       "interesting_paths": []
     },
     {
       "repo": "KhronosGroup/SPIRV-Cross",
-      "url": "https://github.com/KhronosGroup/SPIRV-Cross",
+      "url": "https://github.com/KhronosGroup/SPIRV-Cross/tree/57e4efcc84112abcd426dc5ec248b5339bee04f2",
       "description": "SPIRV-Cross is a practical tool and library for performing reflection on SPIR-V and disassembling SPIR-V back to high level languages.",
       "commit": "57e4efcc84112abcd426dc5ec248b5339bee04f2",
       "date": "2026-10-28T16:28:49Z",
@@ -448,7 +448,7 @@
       "default_branch": "main",
       "files": 4959,
       "tree_truncated": false,
-      "readme_url": "https://github.com/KhronosGroup/SPIRV-Cross/blob/main/README.md",
+      "readme_url": "https://github.com/KhronosGroup/SPIRV-Cross/blob/57e4efcc84112abcd426dc5ec248b5339bee04f2/README.md",
       "interesting_paths": [
         "reference/opt/shaders-hlsl/mesh/mesh-shader-basic-lines.spv14.vk.nocompat.mesh",
         "reference/opt/shaders-hlsl/mesh/mesh-shader-basic-triangle.spv14.vk.nocompat.mesh",
@@ -482,7 +482,7 @@
     },
     {
       "repo": "KhronosGroup/MoltenVK",
-      "url": "https://github.com/KhronosGroup/MoltenVK",
+      "url": "https://github.com/KhronosGroup/MoltenVK/tree/5189f8de86ec365860f63bf1da736815cfaea5cd",
       "description": "MoltenVK is a Vulkan Portability implementation. It layers a subset of the high-performance, industry-standard Vulkan graphics and compute API over Apple's Metal graphics framework, enabling Vulkan applications to run on macOS, iOS and tvOS.",
       "commit": "5189f8de86ec365860f63bf1da736815cfaea5cd",
       "date": "2026-10-13T17:33:32Z",
@@ -490,12 +490,12 @@
       "default_branch": "main",
       "files": 274,
       "tree_truncated": false,
-      "readme_url": "https://github.com/KhronosGroup/MoltenVK/blob/main/README.md",
+      "readme_url": "https://github.com/KhronosGroup/MoltenVK/blob/5189f8de86ec365860f63bf1da736815cfaea5cd/README.md",
       "interesting_paths": []
     },
     {
       "repo": "nvnprogram/UberSlicer",
-      "url": "https://github.com/nvnprogram/UberSlicer",
+      "url": "https://github.com/nvnprogram/UberSlicer/tree/c32fcf2a7dd6cc19d733dc156f755197e486c880",
       "description": "NW nvn/nvn2 ubershader specialisation pipeline",
       "commit": "c32fcf2a7dd6cc19d733dc156f755197e486c880",
       "date": "2026-10-28T00:16:37Z",
@@ -503,7 +503,7 @@
       "default_branch": "main",
       "files": 73,
       "tree_truncated": false,
-      "readme_url": "https://github.com/nvnprogram/UberSlicer/blob/main/README.md",
+      "readme_url": "https://github.com/nvnprogram/UberSlicer/blob/c32fcf2a7dd6cc19d733dc156f755197e486c880/README.md",
       "interesting_paths": [
         "src/sm86/isa_sm86.cpp",
         "src/sm86/isa_sm86.h",
@@ -537,7 +537,7 @@
     },
     {
       "repo": "mlstr0m/switch2bridge-macos",
-      "url": "https://github.com/mlstr0m/switch2bridge-macos",
+      "url": "https://github.com/mlstr0m/switch2bridge-macos/tree/809213eb938335e65a1a4be0eabf21b15c9559c7",
       "description": "Bluetooth bridge for the Nintendo Switch 2 Pro Controller on macOS.",
       "commit": "809213eb938335e65a1a4be0eabf21b15c9559c7",
       "date": "2026-09-28T08:25:06Z",
@@ -545,12 +545,12 @@
       "default_branch": "main",
       "files": 17,
       "tree_truncated": false,
-      "readme_url": "https://github.com/mlstr0m/switch2bridge-macos/blob/main/README.md",
+      "readme_url": "https://github.com/mlstr0m/switch2bridge-macos/blob/809213eb938335e65a1a4be0eabf21b15c9559c7/README.md",
       "interesting_paths": []
     },
     {
       "repo": "kinnay/zbic",
-      "url": "https://github.com/kinnay/zbic",
+      "url": "https://github.com/kinnay/zbic/tree/11b08f2712264bbed731545085cbd9702096ceb7",
       "description": "Python package for the ZBIC compression algorithm of the Nintendo Switch",
       "commit": "11b08f2712264bbed731545085cbd9702096ceb7",
       "date": "2026-08-13T16:29:27Z",
@@ -558,7 +558,7 @@
       "default_branch": "main",
       "files": 9,
       "tree_truncated": false,
-      "readme_url": "https://github.com/kinnay/zbic/blob/main/README.md",
+      "readme_url": "https://github.com/kinnay/zbic/blob/11b08f2712264bbed731545085cbd9702096ceb7/README.md",
       "interesting_paths": [
         "src/zstd.c",
         "src/zstd.h",
@@ -567,7 +567,7 @@
     },
     {
       "repo": "pound-emu/.github",
-      "url": "https://github.com/pound-emu/.github",
+      "url": "https://github.com/pound-emu/.github/tree/19608db5dd3b9fc3cb5be727d440871650c20a97",
       "description": "Official .github repository for the Pound emulator",
       "commit": "19608db5dd3b9fc3cb5be727d440871650c20a97",
       "date": "2025-07-05T06:09:34Z",
@@ -575,12 +575,12 @@
       "default_branch": "main",
       "files": 2,
       "tree_truncated": false,
-      "readme_url": "https://github.com/pound-emu/.github/blob/main/README.md",
+      "readme_url": "https://github.com/pound-emu/.github/blob/19608db5dd3b9fc3cb5be727d440871650c20a97/README.md",
       "interesting_paths": []
     },
     {
       "repo": "pound-emu/www",
-      "url": "https://github.com/pound-emu/www",
+      "url": "https://github.com/pound-emu/www/tree/74cddb7e62d2fe4b0d9634194389d3b408450c97",
       "description": "Official website for Pound emulator",
       "commit": "74cddb7e62d2fe4b0d9634194389d3b408450c97",
       "date": "2025-07-26T17:11:32Z",
@@ -588,8 +588,180 @@
       "default_branch": "main",
       "files": 9,
       "tree_truncated": false,
-      "readme_url": "https://github.com/pound-emu/www/blob/main/README.md",
+      "readme_url": "https://github.com/pound-emu/www/blob/74cddb7e62d2fe4b0d9634194389d3b408450c97/README.md",
       "interesting_paths": []
+    },
+    {
+      "repo": "Djihads80/Eglantine",
+      "url": "https://github.com/Djihads80/Eglantine/tree/b40ad217ab829226841cb71f6e4c5cb05977a225",
+      "description": "VERY experimental Nintendo Switch 2 emulator",
+      "commit": "b40ad217ab829226841cb71f6e4c5cb05977a225",
+      "date": "2026-10-30T21:10:10-04:00",
+      "license": "GPL-3.0",
+      "default_branch": "nx2",
+      "files": 4642,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/Djihads80/Eglantine/blob/b40ad217ab829226841cb71f6e4c5cb05977a225/README.md",
+      "interesting_paths": [
+        "README.md",
+        "src/shader_recompiler/frontend/ampere/lower_to_maxwell.h",
+        "src/video_core/shader_environment.cpp",
+        "src/shader_recompiler/frontend/ampere/program_address_map.h",
+        "src/core/device_memory_manager.inc",
+        "src/core/loader/deconstructed_rom_directory.cpp",
+        "src/qt_common/game_list/worker.cpp",
+        "src/core/file_sys/program_metadata.cpp",
+        "src/core/hle/kernel/k_transfer_memory.cpp",
+        "src/core/hle/service/nx2_gsv.h",
+        "src/video_core/textures/decoders.cpp",
+        "src/video_core/texture_cache/texture_cache.h",
+        "src/shader_recompiler/frontend/ampere/program_capture.h",
+        "src/shader_recompiler/frontend/ampere/program_override.h",
+        "src/video_core/shader_cache.cpp",
+        "src/video_core/native_qmd.h",
+        "src/video_core/macro_turing.h",
+        "src/video_core/renderer_vulkan/vk_graphics_pipeline.cpp"
+      ],
+      "review": "Read-only loader/Horizon/HID, mapping/image lifetime and bounded shader/MME/QMD audit. Only four files differ from de83; no video_core or shader delta. Capture/resource/dependency facts are references, not permission to skip draws or complete rejected dispatches. Imported lowerer pin is unchanged. No execution or new code import. See UPSTREAM_AUDIT.md.",
+      "vendored_commit": "de83c3140e2ab6856d9a1ec1fec1cee96958d087"
+    },
+    {
+      "repo": "NeXoNetwork/NeXo2-emu",
+      "url": "https://github.com/NeXoNetwork/NeXo2-emu/tree/7fa73a5062e64370163a248d1a0b555272012c0f",
+      "description": "Experimental Nintendo Switch 2 emulator in C++.",
+      "commit": "7fa73a5062e64370163a248d1a0b555272012c0f",
+      "date": "2026-10-12T18:13:49Z",
+      "license": "GPL-3.0",
+      "default_branch": "main",
+      "files": 292,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/NeXoNetwork/NeXo2-emu/blob/7fa73a5062e64370163a248d1a0b555272012c0f/README.md",
+      "interesting_paths": [
+        "README.md",
+        "docs/07-nexo-internals/gpu-shaders.md",
+        "src/video_core/shader_decode.cpp",
+        "src/video_core/shader_spirv.cpp"
+      ],
+      "review": "Experimental homebrew/Maxwell and Vulkan source reference; not a commercial NVN2/Metal backend. No code imported."
+    },
+    {
+      "repo": "C-GBL/fOboromi",
+      "url": "https://github.com/C-GBL/fOboromi/tree/f0880fdb5adaf1c4687762e29b4e5879c2a70d7c",
+      "description": "a proof-of-concept project for a possible Nintendo Switch 2 emulator. (fork)",
+      "commit": "f0880fdb5adaf1c4687762e29b4e5879c2a70d7c",
+      "date": "2026-04-02T21:42:12Z",
+      "license": "GPL-3.0",
+      "default_branch": "main",
+      "files": 62,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/C-GBL/fOboromi/blob/f0880fdb5adaf1c4687762e29b4e5879c2a70d7c/README.md",
+      "interesting_paths": [
+        "README.md",
+        "core/src/gpu/sm86.rs",
+        "core/src/gpu/sm86_decoder_generated.rs"
+      ],
+      "review": "SM86 decoder source reference with unimplemented operations; not a working commercial-game runtime. No code imported."
+    },
+    {
+      "repo": "THZoria/HBLauncher",
+      "url": "https://github.com/THZoria/HBLauncher/tree/7fdb2acec9f086e0c9fdf7665cdaa1ff772825af",
+      "description": "SmileBASIC homebrew launcher and documented GPU app SDK, with Pico setup and a Hello World example.",
+      "commit": "7fdb2acec9f086e0c9fdf7665cdaa1ff772825af",
+      "date": "2026-10-23T16:17:48Z",
+      "license": null,
+      "default_branch": "main",
+      "files": 147,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/THZoria/HBLauncher/blob/7fdb2acec9f086e0c9fdf7665cdaa1ff772825af/README.md",
+      "interesting_paths": [
+        "README.md",
+        "sdk/docs/shaders.md",
+        "sdk/docs/native.md",
+        "sdk/docs/capabilities.md"
+      ],
+      "review": "Selected public SDK docs inspected. SmileBASIC GPU-app framework, not an ARM64 NRO loader or Metal backend. License not identified; no code imported or console setup executed."
+    },
+    {
+      "repo": "THZoria/NX_Firmware",
+      "url": "https://github.com/THZoria/NX_Firmware/tree/d235cd789f1447e2ae63ab4588251c020c9c2222",
+      "description": "Firmware for the Nintendo Switch",
+      "commit": "d235cd789f1447e2ae63ab4588251c020c9c2222",
+      "date": "2026-09-10T05:22:26Z",
+      "license": null,
+      "default_branch": "main",
+      "files": 8,
+      "tree_truncated": false,
+      "readme_url": "https://github.com/THZoria/NX_Firmware/blob/d235cd789f1447e2ae63ab4588251c020c9c2222/README.md",
+      "interesting_paths": [
+        "README.md"
+      ],
+      "review": "README/catalog metadata only. No runtime or NVN2/Metal code identified; no firmware or release assets downloaded."
+    },
+    {
+      "repo": "pepsipu/ns2jb",
+      "url": "https://gitlab.com/pepsipu/ns2jb/-/tree/95f5525089273c5fce0b95047f3600f8442e96ae",
+      "description": "Console-native demonstration; selected public text reviewed only for acquisition provenance and interface facts.",
+      "commit": "95f5525089273c5fce0b95047f3600f8442e96ae",
+      "date": "2026-10-22T07:49:48Z",
+      "license": null,
+      "default_branch": "main",
+      "files": 95,
+      "tree_truncated": false,
+      "readme_url": "https://gitlab.com/pepsipu/ns2jb/-/blob/95f5525089273c5fce0b95047f3600f8442e96ae/README.md",
+      "interesting_paths": [
+        "README.md",
+        "engine/shared/ipc.cjs",
+        "engine/switch2/app/filesystem.cjs",
+        "engine/switch2/app/affinity.cjs",
+        "engine/switch2/app/bulk-transfer.cjs",
+        "engine/switch2/ro/payload/process.c"
+      ],
+      "review": "Reference facts only. No LICENSE/COPYING/AGENTS identified; no source, SDK offsets/fingerprints or exploit procedures imported. Nine selected texts inspected; no execution, console communication or binary decoding. No NCA4 or complete dump-exporter claim. See UPSTREAM_AUDIT.md."
+    },
+    {
+      "repo": "Franseven/PokeDinner-a-Eglantine-Fork",
+      "url": "https://git.eden-emu.dev/Franseven/PokeDinner-a-Eglantine-Fork/src/commit/006e27f4f31f5ffe151f01a9fa3824f2d7c3c739",
+      "description": "Eglantine-derived emulator fork; source-only review for independently testable native NX2 ideas.",
+      "commit": "006e27f4f31f5ffe151f01a9fa3824f2d7c3c739",
+      "date": "2026-10-31T01:09:31+01:00",
+      "license": "GPL-3.0-or-later",
+      "license_note": "Preserve inherited per-file SPDX and attribution; no code imported.",
+      "default_branch": "master",
+      "files": 4637,
+      "tree_truncated": false,
+      "release_tag": "1.5.0",
+      "readme_url": "https://git.eden-emu.dev/Franseven/PokeDinner-a-Eglantine-Fork/src/commit/006e27f4f31f5ffe151f01a9fa3824f2d7c3c739/README.md",
+      "interesting_paths": [
+        "src/shader_recompiler/frontend/ampere/lower_to_maxwell.h",
+        "src/video_core/dma_pusher.cpp",
+        "src/video_core/renderer_vulkan/vk_texture_cache.cpp",
+        "src/video_core/texture_cache/util.cpp"
+      ],
+      "review": "Selected shader modifier/vote/cube semantics and memory ownership deltas against Eglantine b40. Existing continuity fix is shared, not new. RET classification differs from the NX2 imported snapshot. No title shader fingerprints, release binaries, code imports or runtime changes. See UPSTREAM_AUDIT.md."
+    },
+    {
+      "repo": "Wael3rd/Eglantine-MKW",
+      "url": "https://github.com/Wael3rd/Eglantine-MKW/tree/efc1224674a20204e8d4064b887835626f553ff6",
+      "description": "Eglantine-derived emulator fork; source-only review for independently testable native NX2 ideas.",
+      "commit": "efc1224674a20204e8d4064b887835626f553ff6",
+      "date": "2026-10-30T16:22:09+01:00",
+      "license": "GPL-3.0-or-later",
+      "license_note": "Preserve inherited per-file SPDX and attribution; no code imported.",
+      "default_branch": "release-c",
+      "files": 4641,
+      "tree_truncated": false,
+      "release_tag": "mkw-2026-10-30-pre",
+      "readme_url": "https://github.com/Wael3rd/Eglantine-MKW/blob/efc1224674a20204e8d4064b887835626f553ff6/README.md",
+      "interesting_paths": [
+        "src/video_core/shader_environment.cpp",
+        "src/video_core/shader_cache.h",
+        "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",
+        "src/video_core/texture_cache/texture_cache.h",
+        "src/shader_recompiler/object_pool.h",
+        "docs/nx2-mkw/changes.md",
+        "docs/nx2-mkw/known-issues.md"
+      ],
+      "review": "Selected lower-once/cache specialization, publication, memory-budget and compiler lifetime deltas. Cache exception can delete an old valid cache; no power-loss durability proof. Vulkan/BC3 policy is not Apple Metal policy. No release binaries or code imported; gameplay/performance claims not reproduced. See UPSTREAM_AUDIT.md."
     }
   ],
   "primary_documents": [
@@ -613,5 +785,6 @@
       "url": "https://docs.mesa3d.org/drivers/kosmickrisp.html",
       "role": "Vulkan-on-Metal alternative for macOS; currently not iOS"
     }
-  ]
+  ],
+  "audit_document": "UPSTREAM_AUDIT.md"
 }

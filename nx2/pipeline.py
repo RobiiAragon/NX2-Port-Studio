@@ -8,13 +8,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import __version__
+from .studio_version import __version__
 from .formats import DumpError, MODULE_NAME, read_npdm, read_nso
 from .romfs import inspect_image
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MKW_ID = "0400C3F00006E000"
-TITLE_NAMES = {MKW_ID: "Mario Kart World", "040074A01BF12000": "Donkey Kong Bananza"}
+TITLE_NAMES = {MKW_ID: "Mario Kart World", "040074A01BF12000": "Donkey Kong Bananza",
+               "0400380020056000": "Splatoon Raiders"}
 BLOCKERS = [
     {"id": "native-cpu", "detail": "Validate Switch 2 ARM64 rewriting, PAC and ABI on Apple hardware."},
     {"id": "horizon-nx2", "detail": "Implement the SDK, service and memory differences used by the selected build."},
@@ -47,6 +48,17 @@ def inspect_dump(input_path: Path, *, census: bool = False, symbols: bool = Fals
         selected = selected.parent
     if not selected.is_dir():
         raise DumpError("Select an extracted game folder")
+    container = None
+    base = child(selected, "base")
+    if base is not None and base.is_dir() and child(base, "exefs") is not None:
+        container = selected
+        updates = child(selected, "updates")
+        if base.is_symlink() or (updates is not None and (updates.is_symlink() or not updates.is_dir())):
+            raise DumpError("Dump versions must be actual directories inside the game root")
+        versions = [p for p in updates.iterdir() if p.is_dir() and p.name.isdecimal()] if updates else []
+        if any(p.is_symlink() for p in versions):
+            raise DumpError("Dump versions must not be symbolic links")
+        selected = max(versions, key=lambda p: int(p.name)) if versions else base
     nested = child(selected, "exefs")
     exefs = nested if nested is not None else selected
     if exefs.is_symlink() or not exefs.is_dir():
@@ -60,6 +72,14 @@ def inspect_dump(input_path: Path, *, census: bool = False, symbols: bool = Fals
     metadata = read_npdm(exefs / "main.npdm")
     if metadata["platform"] != "switch2" or not metadata["is_64_bit"]:
         raise DumpError("This input is not a 64-bit Switch 2 NPDM (ACID +0x300)")
+    if container is not None and base is not None:
+        base_exefs = child(base, "exefs")
+        if base_exefs is None or base_exefs.is_symlink() or not base_exefs.is_dir():
+            raise DumpError("The base ExeFS must be a real directory")
+        local_file(base_exefs / "main.npdm", container)
+        original = read_npdm(base_exefs / "main.npdm")
+        if original["program_id"] != metadata["program_id"] or original["platform"] != "switch2" or not original["is_64_bit"]:
+            raise DumpError("The selected update does not match the base Switch 2 title")
     romfs = child(root, "romfs")
     if romfs is None:
         images = sorted(p for parent in (root, exefs) for p in parent.iterdir()
@@ -86,7 +106,8 @@ def inspect_dump(input_path: Path, *, census: bool = False, symbols: bool = Fals
             modules.append(read_nso(path, census=census, symbols=symbols))
     from .symbols import inspect_linkage
     return {"schema_version": 1, "tool_version": __version__, "stage": "validated-input",
-            "input": {"root": str(root), "exefs": str(exefs), "romfs": str(romfs), "romfs_kind": romfs_kind},
+            "input": {"root": str(root), "exefs": str(exefs), "romfs": str(romfs), "romfs_kind": romfs_kind,
+                      "dump_root": str(container) if container else None},
             "metadata": metadata, "modules": modules,
             "linkage": inspect_linkage(modules) if symbols else None,
             "romfs_layout": romfs_layout,
@@ -108,7 +129,7 @@ def prepare(input_path: Path, output: Path, *, platform: str, census: bool = Fal
     output = output.expanduser().absolute()
     parent = output.parent.resolve(strict=True)
     destination = parent / output.name
-    source = Path(report["input"]["root"])
+    source = Path(report["input"].get("dump_root") or report["input"]["root"])
     if destination.is_relative_to(REPOSITORY) or destination.is_relative_to(source):
         raise DumpError("Choose a private workspace outside the source repository and dump folder")
     if os.path.lexists(destination):
