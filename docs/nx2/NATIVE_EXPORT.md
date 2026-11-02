@@ -4,7 +4,9 @@ I added this path in NX2 Port Studio **0.3.0**. I use nxnative's actual Switch 2
 CPU, NVN2 and native Ampere/Metal implementation at the reviewed revision
 [`1ae435d5dbe378a022ec336692a26787557a6cea`](https://github.com/seedds/nxnative/tree/1ae435d5dbe378a022ec336692a26787557a6cea).
 I prepare that source in a separate private cache rather than overwrite my
-experimental backend or mix two incompatible shader chains.
+experimental backend or mix two incompatible shader chains. I keep its pin in
+`nx2/native_runtime.json`; the experimental lowerer retains its separate
+`upstreams.lock.json` and shader-chain identity unchanged.
 
 ## Exact profiles
 

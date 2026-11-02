@@ -62,12 +62,6 @@
           "sha256": "d92a4b6c599507032f7888fd050d8698eaa1c8643b5c89016c2eba412a430ba8"
         }
       ]
-    },
-    {
-      "name": "nxnative Switch 2 Mac export backend",
-      "url": "https://github.com/seedds/nxnative.git",
-      "commit": "1ae435d5dbe378a022ec336692a26787557a6cea",
-      "role": "Pinned external native Mac dump exporter. Prepared in a private cache, not merged over the experimental NX2 backend. Only exact admitted Bananza/Raiders update builds are enabled; no iOS or network qualification is inherited."
     }
   ]
 }
