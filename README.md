@@ -2,7 +2,9 @@
 
 I am developing native Switch 2 tools for Apple Silicon. In **0.3.0**, I added
 Mac app export through a pinned nxnative engine for exact builds of
-**Donkey Kong Bananza** and **Splatoon Raiders**. **Mario Kart World** remains a planned target.
+**Donkey Kong Bananza** and **Splatoon Raiders**. My current source candidate
+also admits the exact **Mario Kart World base game** through a newer pinned
+engine; its candidate build and memory/network tests are still pending.
 Built from [NX Port Studio](https://github.com/RobiiAragon/NX-Port-Studio), with
 [nxnative](https://github.com/seedds/nxnative) as the native execution foundation
 and [Eden NX2](https://git.eden-emu.dev/Takoroka/eden-nx2/src/branch/eden-nx2)
@@ -43,8 +45,9 @@ RomFS image checks cover metadata ranges and the root entry, not full file
 payload integrity. Source files are read only.
 
 For **native Mac export**, select the game root with `base/exefs`, `base/romfs`
-and `updates/<version>/exefs` plus its fully patched `romfs`. I currently admit
-Bananza update **458752** and Raiders update **65536**, with the executable
+and, when an update is profiled, `updates/<version>/exefs` plus its fully patched
+`romfs`. I currently admit Bananza update **458752**, Raiders update **65536**
+and Mario Kart World’s **base version 0**, with the executable
 identities listed in my [pinned descriptor](nx2/native_runtime.json). A newer or
 different update is refused rather than silently using the wrong profile.
 
@@ -134,7 +137,7 @@ runtime bindings and rendering validation remain open. See
 | Decrypted input | Synthetic structures plus Bananza base/update, eighteen verified NSO segments | No complete RomFS payload hashes or signature verification |
 | Invalid input | Truncation, missing modules, empty RomFS, corrupt hashes, invalid ranges, symlinks | Not full RomFS/signature verification |
 | Workspace | Private output, preserved inputs, recorded builds/platform, refused overwrite | No game executable |
-| Native Mac export | Exact Bananza/Raiders admission; I completed and installed a signed Bananza export; its first launch reached the frame loop in the runtime log; source and cleanup/cancellation fixtures pass | Bananza first frame/gameplay pending; Raiders not exported; no iOS/network qualification |
+| Native Mac export | Exact Bananza/Raiders/Mario Kart World base admission; I completed and installed a signed Bananza export; its first launch reached the frame loop in the runtime log; source and cleanup/cancellation fixtures pass | Bananza first frame/gameplay pending; Raiders and Mario Kart World not exported; new engine pin not replayed; no iOS/network qualification |
 | CPU diagnostic | Bananza base/update reached `nnMain` in a private headless inherited host | Deliberate stop at graphics bootstrap; inherited service/memory assumptions |
 | Ampere tool | 4,543 accepted graphics intermediates from 4,609 BNSH identities; corrected primitive programs compiled to Metal | No title-wide Metal or game-draw validation; unsupported cases fail |
 | Experimental NVN2 | Base Bananza initializes Metal resources, real HID setup, two native graphics programs and its first buffer alias; authored GPU copy/readback passes | Second virtual views, virtual images and drawing remain incomplete; no game image or export |
