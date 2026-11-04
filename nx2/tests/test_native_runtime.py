@@ -3,6 +3,7 @@ import copy
 import json
 import os
 import platform
+import shutil
 import signal
 import sys
 import time
@@ -45,6 +46,24 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertFalse(result["runtime_ready"])
         self.assertEqual(result["native_export"]["version"], 458752)
         self.assertEqual(before, {p: p.read_bytes() for p in self.game.rglob("*") if p.is_file()})
+
+    def test_exact_base_admission_uses_base_without_an_updates_directory(self):
+        shutil.rmtree(self.game / "updates")
+        spec = copy.deepcopy(self.spec)
+        spec["profiles"][self.title]["version"] = 0
+        before = {p: p.read_bytes() for p in self.game.rglob("*") if p.is_file()}
+        report = inspect_native_dump(self.game, spec)
+        self.assertEqual(report["input"]["exefs"], str((self.game / "base/exefs").resolve()))
+        self.assertEqual(report["native_export"]["version"], 0)
+        self.assertFalse(report["native_export"]["gameplay_verified"])
+        self.assertEqual(before, {p: p.read_bytes() for p in self.game.rglob("*") if p.is_file()})
+        (self.game / "updates").mkdir()
+        self.assertEqual(inspect_native_dump(self.game, spec)["input"]["exefs"], report["input"]["exefs"])
+
+    def test_base_profile_never_ignores_an_unqualified_update(self):
+        spec = copy.deepcopy(self.spec)
+        spec["profiles"][self.title]["version"] = 0
+        self.assert_error("native-version-mismatch", lambda: inspect_native_dump(self.game, spec))
 
     def test_unknown_title_and_old_update_are_not_silently_accepted(self):
         bad = copy.deepcopy(self.spec)
