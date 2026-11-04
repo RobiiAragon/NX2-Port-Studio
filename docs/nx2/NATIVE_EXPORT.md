@@ -100,7 +100,13 @@ unrelated files beside the selected destination are preserved.
 On success, failure or handled termination I retire that workspace, leaving
 only a small redacted build log and, on success, its receipt. I never remove
 the dump, a pre-existing output app or another operation's workspace. The
-signed game bundle keeps its own resources; build cleanup must not leave
+packer runs in its own process session. I stop its entire process group before
+removing the workspace, including workers that outlive the packer or ignore
+its termination signal. I preserve the existing one-second cancellation grace
+period and keep the group leader unreaped until the last group signal, so its
+PID cannot be reused for an unrelated group during cleanup. A repeated
+cancellation does not interrupt retirement. The signed game bundle keeps its
+own resources; build cleanup must not leave
 external links. An abrupt power loss or SIGKILL can still leave that operation's
 temporary directory; I do not describe this as crash-proof garbage collection.
 

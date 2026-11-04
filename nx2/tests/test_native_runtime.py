@@ -1,5 +1,7 @@
 """Pinned-source and exact-build admission using original synthetic modules."""
 import copy
+import json
+import os
 import platform
 import signal
 import sys
@@ -121,7 +123,7 @@ class NativeRuntimeTests(unittest.TestCase):
     def export_engine(self):
         engine, _ = self.engine()
         script = engine / "scripts/build_ipa_from_nsp.py"
-        script.write_text('''import sys, pathlib, shutil, plistlib, subprocess, time
+        script.write_text('''import sys, pathlib, shutil, plistlib, subprocess, time, signal
 a=sys.argv
 out=pathlib.Path(a[a.index('--out')+1]);work=pathlib.Path(a[a.index('--work-dir')+1])
 (work/'owned-build-data').write_text('synthetic scratch')
@@ -130,6 +132,9 @@ out.with_name(out.name+'.partial').mkdir()
 mode=a[a.index('--language')+1]
 if mode=='failure':sys.exit(9)
 if mode=='cancel':
+ signal.signal(signal.SIGTERM,signal.SIG_IGN)
+ worker="import json,os,pathlib,signal,sys,time; p=pathlib.Path(sys.argv[1]); signal.signal(signal.SIGTERM,lambda *_:p.with_suffix('.term').write_text('ignored')); t=p.with_suffix('.tmp'); t.write_text(json.dumps({'pid':os.getpid(),'group':os.getpgrp(),'leader':os.getppid()})); os.replace(t,p); time.sleep(60)"
+ subprocess.Popen([sys.executable,'-c',worker,str(pathlib.Path(__file__).resolve().parents[2]/'worker.json')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
  print('fixture ready',flush=True)
  time.sleep(60)
 out.joinpath('Contents/MacOS').mkdir(parents=True)
@@ -178,20 +183,44 @@ runtime.specification=lambda:{spec!r}
 runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self.root / 'Cancelled.app')!r}),language='cancel')
 ''')
         process = subprocess.Popen([sys.executable, str(driver)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        worker = None
         try:
             deadline = time.monotonic() + 5
             private = self.game / "nx2-work"
-            while time.monotonic() < deadline and not list(private.glob(".native-export-*/owned-build-data")):
+            marker = self.root / "worker.json"
+            while time.monotonic() < deadline and not marker.is_file():
                 time.sleep(.01)
+            self.assertTrue(marker.is_file())
+            worker = json.loads(marker.read_text())
             self.assertTrue(list(private.glob(".native-export-*/owned-build-data")))
+            process.send_signal(signal.SIGTERM)
+            deadline = time.monotonic() + 2
+            while not marker.with_suffix(".term").exists() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertTrue(marker.with_suffix(".term").exists(), "the worker must receive group termination")
+            # Cancellation remains in its existing one-second grace interval:
+            # a second request must not interrupt owned-worker cleanup.
             process.send_signal(signal.SIGTERM)
             _, error = process.communicate(timeout=5)
             self.assertEqual(process.returncode, 128 + signal.SIGTERM, error.decode())
+            state = subprocess.run(["ps", "-p", str(worker["pid"]), "-o", "stat="], capture_output=True, text=True)
+            self.assertFalse(state.stdout.strip() and not state.stdout.strip().startswith("Z"),
+                             "the cancelled export left its build worker running")
+            self.assertEqual(worker["group"], worker["leader"])
+            self.assertIsNone(unrelated.poll(), "cancelling one export must preserve unrelated processes")
             self.assertFalse(any(p.is_dir() for p in private.iterdir()))
             self.assertFalse(list(private.glob("*.receipt.json")))
             self.assertFalse(list(self.root.glob(".nx2-export-*")))
             self.assertFalse((self.root / "Cancelled.app.key").exists())
         finally:
+            if worker is not None:
+                try:
+                    if os.getpgid(worker["pid"]) == worker["group"]:
+                        os.kill(worker["pid"], signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            unrelated.terminate(); unrelated.wait(timeout=5)
             if process.poll() is None:
                 process.kill(); process.communicate(timeout=5)
 

@@ -20,6 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .build_process import BuildProcess
 from .formats import DumpError
 from .pipeline import inspect_dump
 
@@ -172,6 +173,7 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     title = report["metadata"]["program_id"]
     previous_signal = signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))
+    build = None
     process = None
     staging = None
     try:
@@ -184,14 +186,15 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                    "--platform", "mac-app", "--out", str(artifact), "--work-dir", str(scratch),
                    "--bundle-id", f"org.nxnative.{title.lower()}", "--language", language, "--progress", "json"]
         with log_path.open("x") as log:
-            process = subprocess.Popen(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT, text=True, bufsize=1)
+            build = BuildProcess(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
+            process = build.process
             assert process.stdout is not None
             for line in process.stdout:
                 clean = _redact(line)
                 log.write(clean)
                 print(clean, end="", flush=True)
-            status = process.wait()
+            status = build.wait()
         if status:
             raise DumpError(f"Native export failed (status {status}); see the private build log",
                             code="native-build-failed", hint=str(log_path))
@@ -217,22 +220,21 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                   "platform": "macOS", "signature_verified": True, "gameplay_verified": False,
                   "log": str(log_path), "temporary_build_removed": True}
     finally:
-        # Only this freshly created workspace is owned by this operation.
-        # Dumps, source, existing apps and unrelated build folders stay intact.
-        if process is not None and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-        if process is not None and process.stdout is not None:
-            process.stdout.close()
-        signal.signal(signal.SIGTERM, previous_signal)
+        # A repeated cancellation must not interrupt retirement of our workers.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         try:
-            if staging is not None:
-                shutil.rmtree(staging)
+            if build is not None:
+                build.cancel()
+            if process is not None and process.stdout is not None:
+                process.stdout.close()
+            # Only this operation's staging and scratch are owned here. Retire
+            # all build workers before removing paths they could still write.
+            try:
+                if staging is not None:
+                    shutil.rmtree(staging)
+            finally:
+                shutil.rmtree(scratch)
         finally:
-            shutil.rmtree(scratch)
+            signal.signal(signal.SIGTERM, previous_signal)
     log_path.with_suffix(".receipt.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
