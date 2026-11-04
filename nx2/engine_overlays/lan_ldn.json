@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "base_commit": "1d4b8e82bcbae79fe10164d210779a4060b61605",
+  "source_repository": "https://github.com/RobiiAragon/nxnative",
+  "source_commit": "bed87969d1e03a69251969b2bdec0dfd284b119c",
+  "additional_sources": [
+    {
+      "repository": "https://github.com/RobiiAragon/NX-Port-Studio",
+      "commits": [
+        "7cb63c27edb273969f10dd7b7d069d88a55fdce8",
+        "6506dbc66715e2d22deabde3c88f4457b1119af3",
+        "869785a96ef0a8425207eb78ac2459d8cfeae52c"
+      ],
+      "scope": "Local EventFd counters and mixed descriptor waits, including the byte-buffer fixture correction and nonblocking notification comment. No online account, routing or TLS provider."
+    }
+  ],
+  "source_scope": "LAN/LDN host contribution adapted to exact base; local-network privacy text added before signing. No graphics or shader-chain changes.",
+  "patch_file": "lan_ldn.patch",
+  "patch_sha256": "444aa2f4998df7c201a96ef2b4302f399297e66e3a62bf95ee04f33d0417d95a",
+  "files": {
+    "dm/host/Makefile": {
+      "before": "da86805b2fe0ea89822d1c52321e6c8242e7212b8d9820771fb8237c94672171",
+      "after": "18a5aa2123b444f785b1740371e1d0efa8da540bf6a90789e55c6e5b4163c60e"
+    },
+    "dm/host/account_local.h": {
+      "before": null,
+      "after": "de0c431c36b3af9dc1d85d25a5b861ad6b1b78f446b684d2f94881970cdba107"
+    },
+    "dm/host/discovery_protocol.h": {
+      "before": null,
+      "after": "44891676c2107e91dbf3995d43d47a1e7e8389a4e978e1f621491c855a17b834"
+    },
+    "dm/host/entry.S": {
+      "before": "950c4115c2a4bc163bbcb5d55f3675f74a0a3effd5fc9c9727618e7078be0fac",
+      "after": "29aab62a4b5dc8ef7fd489492f6d69903fd88b764036adb6e635bceb7be16595"
+    },
+    "dm/host/friends_history.h": {
+      "before": null,
+      "after": "4bf30efa4bbe03a81973b5d739ec9c489aec66815a8b00675d7e094c1a4c59b7"
+    },
+    "dm/host/hle.h": {
+      "before": "4c4a134e6711c4a84bb4297e20cfd63beb5e28c8c276abc8334ba2509ad121ab",
+      "after": "51ef93d943fe8f92abb76cf3ca8177ff439a4ab1bedf75498459a71c5729d04c"
+    },
+    "dm/host/hle_account.c": {
+      "before": "5ff865e39c4b7adde9ea33d2dd9fffa38b208f4a620403468f84ec16ad64d253",
+      "after": "fbdf33e5e177f85b6d718c051c7265cc3f86caac7a234f9012eb7cf2969300c7"
+    },
+    "dm/host/hle_friends.c": {
+      "before": "1608b8894289cc72d54edca77f7effa018fe8f3f9066dc39b69a0322b0adc8da",
+      "after": "85147317609b2da00ada2abc7c8a3f7f2fcd80ffd46524727f66523c328229e0"
+    },
+    "dm/host/hle_friends_history.c": {
+      "before": null,
+      "after": "1c54f591eb3c11a41022a053c578b36652e450da668f4893f80e51c81a46fdde"
+    },
+    "dm/host/hle_ldn.c": {
+      "before": null,
+      "after": "6ad275c929fcffd85718a6aef65b1e61451f3feca1d28ab63640f3e47730ea9f"
+    },
+    "dm/host/hle_ldn.h": {
+      "before": null,
+      "after": "ada625a11648ffae997c9ca2657b512c2de10a8fa5cf20aa79ac32b80e58e31b"
+    },
+    "dm/host/hle_ldn_protocol.c": {
+      "before": null,
+      "after": "0a91d96da42e8c969ef7728c8030fe43279c7b37f6c18590253e2c8dcec53efe"
+    },
+    "dm/host/hle_net.c": {
+      "before": "1e9c2443ac9ad875bd610d0714a4f9434c148ded500148d0c9fa25b1dbc6bc4e",
+      "after": "285e9f17b61a10ce9da15eb7df04b066443789e2e2d9afb01c4a77bf8a897906"
+    },
+    "dm/host/hle_net_backend.c": {
+      "before": null,
+      "after": "e56a3a397736abfe17c84e8c2bc425e5d8e1a3ad42a20a8b056256a474d2bb81"
+    },
+    "dm/host/hle_offline.c": {
+      "before": "100d20c35ec9421e7de8574d6e701779afadfa59a69084c5f5e9be2d66dbb3a3",
+      "after": "7964506cd576bf65f73a72c568beb2f8d1155d76abbcf2fb863236eb86bc5072"
+    },
+    "dm/host/hle_thread.c": {
+      "before": "1abaaf97d0f4d9cfb1cf17b799ef16cdab992384b5222d5dfcf29f09cf57b23c",
+      "after": "91fa52378a515bd46aadf8baa2a380c889cae8b5e1ea871f261c7277883a4314"
+    },
+    "dm/host/loader.c": {
+      "before": "c42483f363b039a23de4841d77f69052c745ade1738fba1cbf3bc0ab8d5bdd98",
+      "after": "5d9edab0af2307af749272a52503c1518942862c0f147b0edf49708a015483f1"
+    },
+    "dm/host/main.c": {
+      "before": "9559b65e0c9cf22c6855b31ebb3129e19c48a71441849264b56a9cd8fd4c73eb",
+      "after": "c50d2ef90910a4e5c175987781143a27808a34c74a1e1f650efaba8fc7f64222"
+    },
+    "dm/host/net_discovery.h": {
+      "before": null,
+      "after": "810348c001e91131c675627df30e200278791a8e1a70141db4fcb4f515a4d352"
+    },
+    "dm/host/net_discovery_queue.inc": {
+      "before": null,
+      "after": "1a67c4a5b36e36d119e0be74f3308b171a2106c912be8ba7d3970a24c5e2af1e"
+    },
+    "dm/host/net_eventfd.inc": {
+      "before": null,
+      "after": "7dda61b39813b3808ebd329fa55b1fb825093abf017a3f37bc932a46766395aa"
+    },
+    "dm/host/net_socket.h": {
+      "before": null,
+      "after": "5b5a612f665dbe5cac32f77caecba471c8058fb197fe744ca5c1b14bc1db8229"
+    },
+    "dm/host/tests/Makefile": {
+      "before": "89738332c764a3656d2a48a7c0f93015d2e938af7366511e3b9fe543fd42f5cb",
+      "after": "9f1ad80acf39b65794f11fa82d62dcd7ae62592c2a83ab9a0b92632375fe6d0a"
+    },
+    "dm/host/tests/t_discovery_protocol.c": {
+      "before": null,
+      "after": "02b2f54a40478502f813429cf9eaba39a1f86130f22b101d5b1c1e38370af58a"
+    },
+    "dm/host/tests/t_eventfd.c": {
+      "before": null,
+      "after": "ccf1543974b0dcb967d54e844a184326f1adcdf7fd01f3da17f0eb6082eb43b6"
+    },
+    "dm/host/tests/t_friends_history.c": {
+      "before": null,
+      "after": "c8b0b198b3993d7d4dc00679c25656fe1764ae71c6b8b76b30dff089d4aec462"
+    },
+    "dm/host/tests/t_hle_wait.S": {
+      "before": null,
+      "after": "cfe9ceb3ff0a0e5886e74d1a909deac7ba5b01599efa6d425a6a26f341af27eb"
+    },
+    "dm/host/tests/t_hle_wait.c": {
+      "before": null,
+      "after": "6b49050cebc97b11c45416459c0d95585c911a91e3c728c9b39aa26209194486"
+    },
+    "dm/host/tests/t_ldn.c": {
+      "before": null,
+      "after": "61d961ef4580b9e8e1eecffac0c88e32f892bf0c68547b8140738df9e9a95657"
+    },
+    "dm/host/tests/t_ldn_events.c": {
+      "before": null,
+      "after": "8f455125b5a708c5cca83c182258e4e074c98fbc63ee898ea0d63b918cf4efce"
+    },
+    "dm/host/tests/t_net.c": {
+      "before": null,
+      "after": "e8b212b7199681cdb73061b9c358b9268523635242aa0bf7738f9163c6afaca6"
+    },
+    "dm/host/tests/t_net_discovery.c": {
+      "before": null,
+      "after": "4ba1812766e999a6f32856f765d692583a9c9a391af00b84ca8c9b80d0ec4b47"
+    },
+    "dm/host/tests/t_net_write_prepare.c": {
+      "before": null,
+      "after": "6d836cc1493964b00db9ab449dee5ed23befde71edd76dc60dd2e92c9c6dd82f"
+    },
+    "dm/host/tests/t_net_write_stub.c": {
+      "before": null,
+      "after": "fe401a36e4791bb18f46a9ca80bd56fbe409489bfe6d2fa3d67784bbdeaf1864"
+    },
+    "dm/host/tests/t_oe_handoff.c": {
+      "before": null,
+      "after": "0bde8debe9a58bd1d5816f11c5ffad16b60b5e83c61939151691f73ce5cc17bf"
+    },
+    "dm/mac/pack_app.py": {
+      "before": "9debbf6cdbdda51434f0e52bfb8a1644592fef9a0e83e30957e734a3a7c39341",
+      "after": "72e2ec1cc696418d5c7ab36bc851c2b229b6ba389ddea15c7589298c13a55f37"
+    }
+  },
+  "local_services": [
+    "lan",
+    "ldn"
+  ]
+}

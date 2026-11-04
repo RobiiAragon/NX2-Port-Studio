@@ -31,6 +31,13 @@ def main():
     engine = app / "Contents/Resources/nx2-engine"
     descriptor = json.loads((engine / "nx2/native_runtime.json").read_text())
     assert len(descriptor["commit"]) == 40 and descriptor["platform"] == "macOS"
+    layer = descriptor.get("overlay")
+    if layer:
+        overlays = engine / "nx2/engine_overlays"
+        content = (overlays / layer["manifest"]).read_bytes()
+        assert hashlib.sha256(content).hexdigest() == layer["sha256"]
+        manifest = json.loads(content)
+        assert hashlib.sha256((overlays / manifest["patch_file"]).read_bytes()).hexdigest() == manifest["patch_sha256"]
     assert (engine / "requirements-nx2-runtime.txt").is_file()
     with tempfile.TemporaryDirectory(prefix="nx2-bundle-test-") as temporary:
         source = dump(Path(temporary) / "Synthetic input", compressed="zbic")

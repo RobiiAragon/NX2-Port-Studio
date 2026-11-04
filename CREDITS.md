@@ -10,6 +10,12 @@ Takoroka / Eden NX2 provides the GPL-3.0-or-later Ampere lowerer and public prot
 
 The images below belong to inherited Switch 1 Studio documentation; they do not demonstrate NX2 gameplay.
 
+I preserve the separate native export engine's MIT license and carry my
+host-only LAN/LDN and local EventFd contributions as a versioned
+[source layer](nx2/engine_overlays/README.md). I record the original commits and
+every patched file's fingerprints in its manifest. The layer preserves the
+base engine's graphics/shader sources and does not include game or SDK data.
+
 ## The foundation
 
 - **seedds / nxnative:** native Switch execution on Apple hardware, the host and graphics layers, profiles, tools and documentation on which this project builds.

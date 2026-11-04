@@ -31,7 +31,18 @@
         "subsdk0": "d39a7a3d44530bb61b35690e5b0383d51f86ff05000000000000000000000000",
         "sdk": "90ebba182862b9ecdc21fcb87b99901224fb8f72000000000000000000000000"
       },
-      "upstream_note": "dm/games/0400C3F00006E000/README.md"
+      "upstream_note": "dm/games/0400C3F00006E000/README.md",
+      "local_services": [
+        "lan"
+      ],
+      "unavailable_local_services": {
+        "ldn": "The original SDK selects Switch 2 local wireless protocol 2, which this provider does not implement."
+      }
     }
-  }
+  },
+  "overlay": {
+    "manifest": "lan_ldn.json",
+    "sha256": "c596b0dbf2dcc3ee4aa5fcfe3370675f8316ea79f0d87ac86eaaf499d344473a"
+  },
+  "cache_id": "1d4b8e82bcbae79fe10164d210779a4060b61605-c596b0dbf2dcc3ee"
 }
