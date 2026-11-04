@@ -34,8 +34,10 @@ The new upstream engine reclaims sparse tiles after their GPU fence and wraps
 large pools in chunks. Its [base-game report](https://github.com/seedds/nxnative/blob/1d4b8e82bcbae79fe10164d210779a4060b61605/dm/games/0400C3F00006E000/README.md#frame-rate)
 reports a 7.1 GB residency set and 9.6–9.8 GB wired memory in the first race on a
 16 GB M6. I treat those as upstream measurements, not a prediction for my Mac
-or a result of this candidate. I have not reduced the application pool,
-dropped tiles, disabled rendering or imposed a memory clamp.
+or a result of this candidate. I retain the upstream base profile’s 9 GiB application-pool plan; the external
+fork used a different memory profile. I have not added a pool override, dropped
+tiles, disabled rendering or imposed a host-memory clamp. Virtual address
+reservations are separate from the resident-memory measurements above.
 
 My acceptance run will compare the same title flyover and race at matching
 resolution, with ordinary process/residency counters recorded after warm-up
