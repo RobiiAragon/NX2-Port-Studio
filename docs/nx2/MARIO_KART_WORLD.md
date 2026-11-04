@@ -58,16 +58,26 @@ functions: 24 names already correspond to NX Port Studio’s service hooks; the
 remaining `MakeBroadcastAddress` is pure SDK address calculation. The socket
 and NIFM surface likewise overlaps the existing backend. I have not equated
 matching names with matching structure layout, protocol behavior or a working
-room. The installed external fork and the clean pinned upstream engine still
-answer these network services as offline; NX2 has not integrated Studio’s
-network backend into that separate engine.
+room. The installed external fork and the clean pinned upstream engine answer
+these network services as offline. I now integrate Studio's actual socket,
+NIFM and LDN providers in a separately fingerprinted
+[host source layer](../../nx2/engine_overlays/README.md). I apply it only to a
+fresh exact-engine checkout, without changing the graphics chain or replacing
+the installed app. I enable it for this admitted base profile with bundled
+`DM_NETWORK=auto`; the game chooses its local mode through its own menus.
 
 The original SDK 19 wrappers also confirm the public network configuration’s
 scene/channel/max-node/version offsets (`0x0a`, `0x10`, `0x12`, `0x14`) and the
-scan filter’s flags at `0x5c`, masked to `0x37`. I still need to check the
-remaining result layouts and protocol behavior, integrate and test the real
-socket/NIFM and LDN lifecycle paths against this engine, then
-verify room discovery, creation, joining and a completed session. An IP LDN
+scan filter’s flags at `0x5c`, masked to `0x37`.
+The original executable also imports EventFd, EventFdRead and EventFdWrite.
+My authored availability probe reproduced the prior ENETDOWN answer. I carry
+Studio's real local counters and mixed descriptor waits into this layer;
+the counters remain usable offline and do not invent network availability.
+
+I tested the real socket/NIFM and LDN lifecycle paths against this engine,
+including two independent host processes. I still need to qualify the remaining
+game-facing result layouts in use and verify actual game room discovery,
+creation, joining and a completed session. An IP LDN
 bridge also needs a compatible peer implementation; it does not directly
 speak a stock console’s radio protocol. A working built-in LAN test is a
 separate result and must not be described as LDN validation.
@@ -98,3 +108,14 @@ the actual base dump and the existing Bananza/Raiders dumps against the new
 descriptor without modifying them. An authored base-only admission case
 reproduced the old `updates/0` failure; it now selects `base/`, preserves the
 inputs and continues to reject a newer unqualified update.
+
+For the host-network layer I passed **82 NX2 source tests**, rebuilt the NX2
+Studio target and linked the complete patched host. Its registry validates
+**1,112 unique forced HLE entries**. I passed the real provider fixtures:
+**94** socket/NIFM checks, **4,688** discovery checks, **14,849** two-process LDN
+checks, **2,152** EventFd checks and **100** tracked-output checks, plus LDN event
+lifetime and guest pause/resume fixtures. ASan/UBSan runs passed as well.
+I also passed **836,727** authored malformed-packet/parser checks. These are
+source/provider results, not a game room, race or Switch peer measurement.
+My signed synthetic app carries its local-network environment, privacy text
+and exact host-layer receipt while explicitly keeping multiplayer unverified.

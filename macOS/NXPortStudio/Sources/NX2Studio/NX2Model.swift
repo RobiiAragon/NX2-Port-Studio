@@ -124,8 +124,8 @@ final class NX2Model {
         let manifest = repositoryURL.appendingPathComponent("nx2/native_runtime.json")
         let data = (try? Data(contentsOf: manifest)) ?? Data()
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        let commit = json?["commit"] as? String ?? "unavailable"
-        return environmentURL.deletingLastPathComponent().appendingPathComponent("native-engines/" + commit)
+        let identity = json?["cache_id"] as? String ?? json?["commit"] as? String ?? "unavailable"
+        return environmentURL.deletingLastPathComponent().appendingPathComponent("native-engines/" + identity)
     }
 
     func prepareNativeEngine() {

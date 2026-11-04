@@ -109,6 +109,30 @@ jobs:
         run: python3 tools/maintainers/ci_network_checks.py relay
       - name: Local play-history service and sanitizers
         run: python3 tools/maintainers/ci_network_checks.py friends-history
+  native-network:
+    name: Pinned Switch 2 LAN and LDN / macOS
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v6
+        with:
+          repository: seedds/nxnative
+          ref: 1d4b8e82bcbae79fe10164d210779a4060b61605
+          path: .nx2-build/native-network-engine
+          persist-credentials: false
+      - run: python -m pip install -r requirements-nx2.txt
+      - name: Apply attested host sources and exercise actual providers
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          ASAN_OPTIONS: halt_on_error=1:detect_stack_use_after_return=1:use_sigaltstack=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: python tools/maintainers/check_native_network.py .nx2-build/native-network-engine
   firmware-tools:
     name: Firmware parser / synthetic data
     runs-on: ubuntu-latest
