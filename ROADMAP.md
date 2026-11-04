@@ -15,7 +15,9 @@ and RomFS payload integrity remain unverified.
 Bananza's base and update reached `nnMain` in a private headless inherited-host
 diagnostic after fixing the process-page-size query. The probe deliberately
 stops before graphics. Establish the new SDK initialization, services and memory
-semantics beyond that limited path. Mario Kart World still awaits its dump.
+semantics beyond that limited path. I have now verified Mario Kart World’s
+base dump and admitted its exact module identities in the separate pinned
+export path. I have not exported or played it through NX2 yet.
 Do not fabricate memory values or fixed addresses.
 
 Exit evidence: rewritten ARM64 modules reach game initialization on Apple Silicon.
@@ -57,3 +59,9 @@ No iOS compatibility is established by the input tools.
 Add titles based on measured differences with exact-build gates. LAN, LDN and
 online services need their own implementation and physical validation. Inherited
 Switch 1 network results do not establish Switch 2 interoperability.
+
+I am investigating Mario Kart World’s memory and local network separately: the
+installed external fork retains sparse texture allocations and exposes offline
+network services. My candidate engine adds upstream tile reclamation and
+chunked pool buffers. I still need a controlled memory comparison and a real
+LAN/LDN room/session; matching service imports is not interoperability evidence.

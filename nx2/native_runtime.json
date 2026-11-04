@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repository": "https://github.com/seedds/nxnative.git",
-  "commit": "1ae435d5dbe378a022ec336692a26787557a6cea",
+  "commit": "1d4b8e82bcbae79fe10164d210779a4060b61605",
   "platform": "macOS",
   "profiles": {
     "040074A01BF12000": {
@@ -22,6 +22,16 @@
         "sdk": "41d4de4a3b78214ad20c896960df0e5ea0ed595f000000000000000000000000"
       },
       "upstream_note": "dm/games/0400380020056000/README.md"
+    },
+    "0400C3F00006E000": {
+      "name": "Mario Kart World",
+      "version": 0,
+      "modules": {
+        "main": "9e244438c3d8ef1c703a6a85ef99c4f000000000000000000000000000000000",
+        "subsdk0": "d39a7a3d44530bb61b35690e5b0383d51f86ff05000000000000000000000000",
+        "sdk": "90ebba182862b9ecdc21fcb87b99901224fb8f72000000000000000000000000"
+      },
+      "upstream_note": "dm/games/0400C3F00006E000/README.md"
     }
   }
 }

@@ -92,7 +92,7 @@ def prepare_engine(destination: Path) -> dict:
 
 
 def inspect_native_dump(dump: Path, spec: dict | None = None) -> dict:
-    """Admit the exact profiled update, not a similar title or an old base."""
+    """Admit the exact profiled base/update, not another title or version."""
     spec = spec or specification()
     if dump.is_symlink():
         raise DumpError("Select the original dump folder", code="native-dump-layout")
@@ -114,7 +114,8 @@ def inspect_native_dump(dump: Path, spec: dict | None = None) -> dict:
     if version != profile["version"]:
         raise DumpError(f"This engine profile requires update {profile['version']}; the dump selects {version}",
                         code="native-version-mismatch", hint="Use the exact profiled update, with its fully patched RomFS.")
-    selected = root / "updates" / str(version)
+    # Version zero names base/ in the upstream packer; it is not updates/0.
+    selected = root / "updates" / str(version) if version else root / "base"
     report = inspect_dump(selected)
     if report["metadata"]["program_id"] != title:
         raise DumpError("The update and base identify different games", code="native-title-mismatch")
