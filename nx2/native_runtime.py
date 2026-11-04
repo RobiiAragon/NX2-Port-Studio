@@ -20,6 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .build_guardian import GuardianBuildProcess as BuildProcess
 from .formats import DumpError
 from .pipeline import inspect_dump
 
@@ -92,7 +93,7 @@ def prepare_engine(destination: Path) -> dict:
 
 
 def inspect_native_dump(dump: Path, spec: dict | None = None) -> dict:
-    """Admit the exact profiled update, not a similar title or an old base."""
+    """Admit the exact profiled base/update, not another title or version."""
     spec = spec or specification()
     if dump.is_symlink():
         raise DumpError("Select the original dump folder", code="native-dump-layout")
@@ -114,7 +115,8 @@ def inspect_native_dump(dump: Path, spec: dict | None = None) -> dict:
     if version != profile["version"]:
         raise DumpError(f"This engine profile requires update {profile['version']}; the dump selects {version}",
                         code="native-version-mismatch", hint="Use the exact profiled update, with its fully patched RomFS.")
-    selected = root / "updates" / str(version)
+    # Version zero names base/ in the upstream packer; it is not updates/0.
+    selected = root / "updates" / str(version) if version else root / "base"
     report = inspect_dump(selected)
     if report["metadata"]["program_id"] != title:
         raise DumpError("The update and base identify different games", code="native-title-mismatch")
@@ -171,10 +173,31 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
     environment = {k: v for k, v in os.environ.items() if not k.startswith("DM_")}
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     title = report["metadata"]["program_id"]
-    previous_signal = signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))
+    starting_build = False
+    cancellation_requested = None
+    cancellation_signals = (signal.SIGTERM, signal.SIGINT)
+    def ignore_cancellation():
+        for sig in cancellation_signals:
+            signal.signal(sig, signal.SIG_IGN)
+    def cancel_export(sig, *_):
+        nonlocal cancellation_requested
+        if starting_build:
+            # Capture the child's group and supervisor before a signal may
+            # unwind the call assigning that ownership to this export.
+            if cancellation_requested is None:
+                cancellation_requested = sig
+        else:
+            ignore_cancellation()
+            if sig == signal.SIGINT:
+                raise KeyboardInterrupt
+            sys.exit(128 + sig)
+    previous_signals = {sig: signal.getsignal(sig) for sig in cancellation_signals}
+    build = None
     process = None
     staging = None
     try:
+        for sig in cancellation_signals:
+            signal.signal(sig, cancel_export)
         # Upstream writes app.key inventories and app.partial beside its output.
         # Own that entire staging folder on the destination volume, so cleanup
         # can remove those products without touching an existing sibling file.
@@ -184,14 +207,21 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                    "--platform", "mac-app", "--out", str(artifact), "--work-dir", str(scratch),
                    "--bundle-id", f"org.nxnative.{title.lower()}", "--language", language, "--progress", "json"]
         with log_path.open("x") as log:
-            process = subprocess.Popen(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
-                                       stderr=subprocess.STDOUT, text=True, bufsize=1)
+            starting_build = True
+            try:
+                build = BuildProcess(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True, bufsize=1)
+            finally:
+                starting_build = False
+            process = build.process
+            if cancellation_requested is not None:
+                cancel_export(cancellation_requested)
             assert process.stdout is not None
-            for line in process.stdout:
+            for line in build.output_lines():
                 clean = _redact(line)
                 log.write(clean)
                 print(clean, end="", flush=True)
-            status = process.wait()
+            status = build.wait()
         if status:
             raise DumpError(f"Native export failed (status {status}); see the private build log",
                             code="native-build-failed", hint=str(log_path))
@@ -217,22 +247,24 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                   "platform": "macOS", "signature_verified": True, "gameplay_verified": False,
                   "log": str(log_path), "temporary_build_removed": True}
     finally:
-        # Only this freshly created workspace is owned by this operation.
-        # Dumps, source, existing apps and unrelated build folders stay intact.
-        if process is not None and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-        if process is not None and process.stdout is not None:
-            process.stdout.close()
-        signal.signal(signal.SIGTERM, previous_signal)
+        # A repeated cancellation must not interrupt retirement of our workers.
+        ignore_cancellation()
         try:
-            if staging is not None:
-                shutil.rmtree(staging)
+            try:
+                if build is not None:
+                    build.cancel()
+            finally:
+                if process is not None and process.stdout is not None:
+                    process.stdout.close()
+            # Only this operation's staging and scratch are owned here. Retire
+            # all build workers before removing paths they could still write.
+            try:
+                if staging is not None:
+                    shutil.rmtree(staging)
+            finally:
+                shutil.rmtree(scratch)
         finally:
-            shutil.rmtree(scratch)
+            for sig, handler in previous_signals.items():
+                signal.signal(sig, handler)
     log_path.with_suffix(".receipt.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
