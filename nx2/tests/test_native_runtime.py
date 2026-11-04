@@ -175,16 +175,23 @@ subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(out)],check=True)
         self.assertFalse((self.root / "Failure.app.key").exists())
         self.assertFalse((self.root / "Failure.app.partial").exists())
 
-    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
-    def test_termination_retires_child_and_scratch_without_a_success_receipt(self):
+    def cancelled_export(self, requested_signal):
         engine, spec = self.export_engine()
         driver = self.root / "driver.py"
-        driver.write_text(f'''import sys
+        restored = self.root / "handlers-restored.txt"
+        driver.write_text(f'''import signal,sys
 from pathlib import Path
 sys.path.insert(0,{str(Path(__file__).resolve().parents[2])!r})
 import nx2.native_runtime as runtime
 runtime.specification=lambda:{spec!r}
-runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self.root / 'Cancelled.app')!r}),language='cancel')
+previous={{s:signal.getsignal(s) for s in (signal.SIGTERM,signal.SIGINT)}}
+try:
+ try:
+  runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self.root / 'Cancelled.app')!r}),language='cancel')
+ except KeyboardInterrupt:
+  sys.exit(130)
+finally:
+ Path({str(restored)!r}).write_text(str(all(signal.getsignal(s)==h for s,h in previous.items())))
 ''')
         process = subprocess.Popen([sys.executable, str(driver)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
@@ -198,7 +205,7 @@ runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self
             self.assertTrue(marker.is_file())
             worker = json.loads(marker.read_text())
             self.assertTrue(list(private.glob(".native-export-*/owned-build-data")))
-            process.send_signal(signal.SIGTERM)
+            process.send_signal(requested_signal)
             deadline = time.monotonic() + 2
             while not marker.with_suffix(".term").exists() and time.monotonic() < deadline:
                 time.sleep(.01)
@@ -206,8 +213,10 @@ runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self
             # Cancellation remains in its existing one-second grace interval:
             # a second request must not interrupt owned-worker cleanup.
             process.send_signal(signal.SIGTERM)
+            process.send_signal(signal.SIGINT)
             _, error = process.communicate(timeout=5)
-            self.assertEqual(process.returncode, 128 + signal.SIGTERM, error.decode())
+            self.assertEqual(process.returncode, 128 + requested_signal, error.decode())
+            self.assertEqual(restored.read_text(), "True")
             state = subprocess.run(["ps", "-p", str(worker["pid"]), "-o", "stat="], capture_output=True, text=True)
             self.assertFalse(state.stdout.strip() and not state.stdout.strip().startswith("Z"),
                              "the cancelled export left its build worker running")
@@ -227,6 +236,14 @@ runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self
             unrelated.terminate(); unrelated.wait(timeout=5)
             if process.poll() is None:
                 process.kill(); process.communicate(timeout=5)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_termination_retires_child_and_scratch_without_a_success_receipt(self):
+        self.cancelled_export(signal.SIGTERM)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_keyboard_interrupt_retires_group_and_restores_handlers(self):
+        self.cancelled_export(signal.SIGINT)
 
     def export_with_inherited_output(self, failure):
         engine, spec = self.export_engine()
@@ -275,11 +292,11 @@ except runtime.DumpError as error:
     def test_failed_packer_with_inherited_stdout_worker_reports_failure_and_retires_scratch(self):
         self.export_with_inherited_output(True)
 
-    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
-    def test_cancellation_during_group_registration_cannot_lose_build_ownership(self):
+    def cancelled_registration(self, requested_signal):
         engine, spec = self.export_engine()
         owner = self.root / "owner.json"
         driver = self.root / "driver.py"
+        restored = self.root / "handlers-restored.txt"
         driver.write_text(f'''import json,os,signal,sys
 from pathlib import Path
 sys.path.insert(0,{str(Path(__file__).resolve().parents[2])!r})
@@ -289,17 +306,25 @@ original=runtime.BuildProcess
 def register(*args,**options):
  build=original(*args,**options)
  Path({str(owner)!r}).write_text(json.dumps({{'group':build.group_id}}))
- os.kill(os.getpid(),signal.SIGTERM)
- os.kill(os.getpid(),signal.SIGTERM)
+ os.kill(os.getpid(),{int(requested_signal)})
+ os.kill(os.getpid(),{int(requested_signal)})
  return build
 runtime.BuildProcess=register
-runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self.root / 'Registration.app')!r}),language='cancel')
+previous={{s:signal.getsignal(s) for s in (signal.SIGTERM,signal.SIGINT)}}
+try:
+ try:
+  runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self.root / 'Registration.app')!r}),language='cancel')
+ except KeyboardInterrupt:
+  sys.exit(130)
+finally:
+ Path({str(restored)!r}).write_text(str(all(signal.getsignal(s)==h for s,h in previous.items())))
 ''')
         unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
         process = subprocess.Popen([sys.executable, str(driver)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             _, error = process.communicate(timeout=5)
-            self.assertEqual(process.returncode, 128 + signal.SIGTERM, error.decode())
+            self.assertEqual(process.returncode, 128 + requested_signal, error.decode())
+            self.assertEqual(restored.read_text(), "True")
             group = json.loads(owner.read_text())["group"]
             states = subprocess.run(["ps", "-axo", "pgid=,stat="], capture_output=True, text=True, check=True)
             self.assertFalse(any(int(pgid) == group and not state.startswith("Z")
@@ -319,6 +344,14 @@ runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self
             if process.poll() is None:
                 process.kill(); process.communicate(timeout=5)
             unrelated.terminate(); unrelated.wait(timeout=5)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_cancellation_during_group_registration_cannot_lose_build_ownership(self):
+        self.cancelled_registration(signal.SIGTERM)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_keyboard_interrupt_during_group_registration_cannot_lose_build_ownership(self):
+        self.cancelled_registration(signal.SIGINT)
 
 
 if __name__ == "__main__":

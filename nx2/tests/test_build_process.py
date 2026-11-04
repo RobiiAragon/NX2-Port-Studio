@@ -37,6 +37,25 @@ def running(pid):
 
 @unittest.skipUnless(sys.platform in {"darwin", "linux"}, "native POSIX build supervision")
 class BuildProcessTests(unittest.TestCase):
+    def test_supervisor_start_failure_reaps_owned_process_and_closes_captured_streams(self):
+        created = []
+        original = subprocess.Popen
+        def capture(*args, **options):
+            process = original(*args, **options)
+            created.append(process)
+            return process
+        with patch("nx2.build_process.subprocess.Popen", side_effect=capture), \
+             patch("nx2.build_process.threading.Thread.start", side_effect=RuntimeError("synthetic start failure")):
+            with self.assertRaisesRegex(RuntimeError, "synthetic start failure"):
+                BuildProcess([sys.executable, "-c", "import time; time.sleep(60)"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(len(created), 1)
+        self.assertIsNotNone(created[0].returncode)
+        self.assertTrue(created[0].stdout.closed)
+        self.assertTrue(created[0].stderr.closed)
+        with self.assertRaises(ChildProcessError):
+            os.waitpid(created[0].pid, os.WNOHANG)
+
     def test_output_lines_preserves_utf8_across_reads_and_the_last_fragment(self):
         source = "import os; os.write(1,b'A'*65535+'é'.encode()+b'\\r\\nlast')"
         build = BuildProcess([sys.executable, "-c", source], stdout=subprocess.PIPE, text=True, encoding="utf-8")

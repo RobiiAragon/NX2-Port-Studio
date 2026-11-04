@@ -48,6 +48,10 @@ class BuildProcess:
                     with self._ownership:
                         self._retire_locked()
             finally:
+                if self.process is not None:
+                    for stream in (self.process.stdin, self.process.stdout, self.process.stderr):
+                        if stream is not None:
+                            stream.close()
                 if self._watch is not None:
                     self._watch.close()
                 self._close_wakeup()

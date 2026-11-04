@@ -173,21 +173,30 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     title = report["metadata"]["program_id"]
     starting_build = False
-    cancellation_requested = False
-    def cancel_export(*_):
+    cancellation_requested = None
+    cancellation_signals = (signal.SIGTERM, signal.SIGINT)
+    def ignore_cancellation():
+        for sig in cancellation_signals:
+            signal.signal(sig, signal.SIG_IGN)
+    def cancel_export(sig, *_):
         nonlocal cancellation_requested
         if starting_build:
             # Capture the child's group and supervisor before a signal may
             # unwind the call assigning that ownership to this export.
-            cancellation_requested = True
+            if cancellation_requested is None:
+                cancellation_requested = sig
         else:
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
-            sys.exit(128 + signal.SIGTERM)
-    previous_signal = signal.signal(signal.SIGTERM, cancel_export)
+            ignore_cancellation()
+            if sig == signal.SIGINT:
+                raise KeyboardInterrupt
+            sys.exit(128 + sig)
+    previous_signals = {sig: signal.getsignal(sig) for sig in cancellation_signals}
     build = None
     process = None
     staging = None
     try:
+        for sig in cancellation_signals:
+            signal.signal(sig, cancel_export)
         # Upstream writes app.key inventories and app.partial beside its output.
         # Own that entire staging folder on the destination volume, so cleanup
         # can remove those products without touching an existing sibling file.
@@ -204,8 +213,8 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
             finally:
                 starting_build = False
             process = build.process
-            if cancellation_requested:
-                sys.exit(128 + signal.SIGTERM)
+            if cancellation_requested is not None:
+                cancel_export(cancellation_requested)
             assert process.stdout is not None
             for line in build.output_lines():
                 clean = _redact(line)
@@ -238,7 +247,7 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                   "log": str(log_path), "temporary_build_removed": True}
     finally:
         # A repeated cancellation must not interrupt retirement of our workers.
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        ignore_cancellation()
         try:
             if build is not None:
                 build.cancel()
@@ -252,6 +261,7 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
             finally:
                 shutil.rmtree(scratch)
         finally:
-            signal.signal(signal.SIGTERM, previous_signal)
+            for sig, handler in previous_signals.items():
+                signal.signal(sig, handler)
     log_path.with_suffix(".receipt.json").write_text(json.dumps(result, indent=2) + "\n")
     return result

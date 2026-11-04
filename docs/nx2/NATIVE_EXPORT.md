@@ -106,8 +106,9 @@ its termination signal. A supervisor watches the packer's exit independently
 of stdout, so a surviving compiler cannot hold the export's output pipe open.
 I preserve the existing one-second cancellation grace
 period and keep the group leader unreaped until the last group signal, so its
-PID cannot be reused for an unrelated group during cleanup. A repeated
-cancellation does not interrupt retirement. The signed game bundle keeps its
+PID cannot be reused for an unrelated group during cleanup. I defer SIGTERM
+and Ctrl-C until process ownership is registered and restore both handlers
+after cleanup; repeated cancellation does not interrupt retirement. The signed game bundle keeps its
 own resources; build cleanup must not leave
 external links. An abrupt power loss or SIGKILL can still leave that operation's
 temporary directory; I do not describe this as crash-proof garbage collection.
