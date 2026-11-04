@@ -7,3 +7,8 @@ dm/third_party/notices/** -text
 # Preserve byte-for-byte upstream snapshots, including their original whitespace.
 third_party/zbic-zstd/* -text -whitespace
 third_party/eglantine-nx2/lower_to_maxwell.h -text -whitespace
+
+# Patch context intentionally prefixes empty lines and Makefile tabs with a
+# space. The overlay applies with git apply --whitespace=error; check added
+# source lines there rather than treating its structural context as source.
+nx2/engine_overlays/*.patch -text -whitespace
