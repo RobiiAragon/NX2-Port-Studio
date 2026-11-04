@@ -17,7 +17,7 @@ from nx2.build_process import BuildProcess
 WORKER = """import json,os,pathlib,signal,sys,time
 signal.signal(signal.SIGTERM,signal.SIG_IGN)
 p=pathlib.Path(sys.argv[1]); temporary=p.with_suffix('.tmp')
-temporary.write_text(json.dumps({'pid':os.getpid(),'group':os.getpgrp(),'leader':os.getppid()}))
+temporary.write_text(json.dumps({'pid':os.getpid(),'group':os.getpgrp(),'leader':os.getppid(),'blocked':[int(s) for s in signal.pthread_sigmask(signal.SIG_BLOCK,[])]}))
 os.replace(temporary,p)
 time.sleep(60)
 """
@@ -124,6 +124,8 @@ class BuildProcessTests(unittest.TestCase):
                 self.assertEqual(worker["leader"], build.group_id)
                 self.assertEqual(worker["group"], build.group_id)
                 self.assertNotEqual(build.group_id, os.getpgrp())
+                self.assertNotIn(int(signal.SIGINT), worker["blocked"])
+                self.assertNotIn(int(signal.SIGTERM), worker["blocked"])
                 if mode == "wait":
                     self.assertTrue(running(worker["pid"]))
                 if inherited_stdout:

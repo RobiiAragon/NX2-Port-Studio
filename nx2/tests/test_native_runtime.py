@@ -16,6 +16,7 @@ from nx2.errors import DumpError
 from nx2.native_runtime import inspect_native_dump, verify_engine, annotate_inspection, export_mac
 from nx2.pipeline import inspect_dump
 from nx2.tests.fixtures import dump
+from nx2.tests.test_build_guardian import denied_guardian, until, running
 
 
 class NativeRuntimeTests(unittest.TestCase):
@@ -245,27 +246,73 @@ finally:
     def test_keyboard_interrupt_retires_group_and_restores_handlers(self):
         self.cancelled_export(signal.SIGINT)
 
-    def export_with_inherited_output(self, failure):
+    def export_with_inherited_output(self, failure, *, interrupt_close=False, interrupt_result=False):
         engine, spec = self.export_engine()
         output = self.root / "Inherited.app"
         driver = self.root / "driver.py"
+        restored = self.root / "handlers-restored.txt"
+        foreign = self.root / "foreign-fd.txt"
         mode = "orphan-failure" if failure else "orphan-success"
-        driver.write_text(f'''import sys
+        hook = f'''foreign_fd=None
+fired=False
+real_close=os.close
+real_read=os.read
+original=runtime.BuildProcess
+def register(*args,**options):
+ build=original(*args,**options)
+ target=build._result_reader
+ def close(fd):
+  global foreign_fd,fired
+  real_close(fd)
+  if fd==target and not fired:
+   fired=True
+   opened=os.open({str(foreign)!r},os.O_CREAT|os.O_WRONLY,0o600)
+   if opened!=target:
+    os.dup2(opened,target)
+    real_close(opened)
+   foreign_fd=target
+   os.kill(os.getpid(),signal.SIGINT)
+ def read(fd,size):
+  global fired
+  data=real_read(fd,size)
+  if fd==target and not fired:
+   fired=True
+   os.kill(os.getpid(),signal.SIGINT)
+  return data
+ if {interrupt_close!r}:os.close=close
+ else:os.read=read
+ return build
+runtime.BuildProcess=register
+''' if interrupt_close or interrupt_result else "foreign_fd=None\nfired=False\n"
+        driver.write_text(f'''import os,signal,sys
 from pathlib import Path
 sys.path.insert(0,{str(Path(__file__).resolve().parents[2])!r})
 import nx2.native_runtime as runtime
 runtime.specification=lambda:{spec!r}
+{hook}
+previous={{s:signal.getsignal(s) for s in (signal.SIGTERM,signal.SIGINT)}}
 try:
- runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(output)!r}),language={mode!r})
-except runtime.DumpError as error:
- print(error.code,flush=True)
- sys.exit(9)
+ try:
+  runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(output)!r}),language={mode!r})
+ except runtime.DumpError as error:
+  print(error.code,flush=True)
+  sys.exit(9)
+ except KeyboardInterrupt:
+  if foreign_fd is not None:os.write(foreign_fd,b'alive')
+  sys.exit(130)
+finally:
+ Path({str(restored)!r}).write_text(str(all(signal.getsignal(s)==h for s,h in previous.items())))
+ if foreign_fd is not None:os.close(foreign_fd)
 ''')
         unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
         process = subprocess.Popen([sys.executable, str(driver)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             stdout, error = process.communicate(timeout=5)
-            self.assertEqual(process.returncode, 9 if failure else 0, error.decode())
+            interrupted = interrupt_close or interrupt_result
+            self.assertEqual(process.returncode, 130 if interrupted else 9 if failure else 0, error.decode())
+            self.assertEqual(restored.read_text(), "True")
+            if interrupt_close:
+                self.assertEqual(foreign.read_text(), "alive", "retry must not close a recycled descriptor")
             if failure:
                 self.assertIn(b"native-build-failed", stdout)
             worker = json.loads((self.root / "worker.json").read_text())
@@ -273,10 +320,10 @@ except runtime.DumpError as error:
             self.assertFalse(state.stdout.strip() and not state.stdout.strip().startswith("Z"))
             self.assertEqual(worker["group"], worker["leader"])
             self.assertIsNone(unrelated.poll())
-            self.assertEqual(output.is_dir(), not failure)
+            self.assertEqual(output.is_dir(), not failure and not interrupted)
             private = self.game / "nx2-work"
             self.assertFalse(any(p.is_dir() for p in private.iterdir()))
-            self.assertEqual(bool(list(private.glob("*.receipt.json"))), not failure)
+            self.assertEqual(bool(list(private.glob("*.receipt.json"))), not failure and not interrupted)
             self.assertFalse(list(self.root.glob(".nx2-export-*")))
         finally:
             if process.poll() is None:
@@ -291,6 +338,14 @@ except runtime.DumpError as error:
     @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
     def test_failed_packer_with_inherited_stdout_worker_reports_failure_and_retires_scratch(self):
         self.export_with_inherited_output(True)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_interrupt_after_reader_close_preserves_recycled_fd_and_cleans_workspace(self):
+        self.export_with_inherited_output(False, interrupt_close=True)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_interrupt_after_reading_guardian_result_preserves_interrupt_and_cleanup(self):
+        self.export_with_inherited_output(False, interrupt_result=True)
 
     def cancelled_registration(self, requested_signal):
         engine, spec = self.export_engine()
@@ -352,6 +407,63 @@ finally:
     @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
     def test_keyboard_interrupt_during_group_registration_cannot_lose_build_ownership(self):
         self.cancelled_registration(signal.SIGINT)
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac signature fixture")
+    def test_unverified_worker_retirement_preserves_staging_and_private_workspace(self):
+        engine, spec = self.export_engine()
+        wrapper = denied_guardian(self.root / "denied.py")
+        with patch("nx2.native_runtime.specification", return_value=spec), \
+             patch("nx2.build_guardian.__file__", str(wrapper)):
+            with self.assertRaisesRegex(OSError, "could not be retired"):
+                export_mac(self.game, engine, self.root / "Unverified.app")
+        self.assertFalse((self.root / "Unverified.app").exists())
+        self.assertTrue(list(self.root.glob(".nx2-export-*")))
+        private = self.game / "nx2-work"
+        self.assertTrue(any(path.is_dir() for path in private.iterdir()))
+        self.assertFalse(list(private.glob("*.receipt.json")))
+
+    @unittest.skipUnless(sys.platform == "darwin" and platform.machine() == "arm64", "Mac process fixture")
+    def test_gui_immediate_group_kill_does_not_orphan_native_export_workers(self):
+        engine, spec = self.export_engine()
+        driver = self.root / "owner.py"
+        driver.write_text(f'''import sys
+from pathlib import Path
+sys.path.insert(0,{str(Path(__file__).resolve().parents[2])!r})
+import nx2.native_runtime as runtime
+runtime.specification=lambda:{spec!r}
+runtime.export_mac(Path({str(self.game)!r}),Path({str(engine)!r}),Path({str(self.root / 'Killed.app')!r}),language='cancel')
+''')
+        unrelated = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        outer = subprocess.Popen([sys.executable, str(driver)], start_new_session=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        worker = None
+        try:
+            marker = self.root / "worker.json"
+            self.assertTrue(until(marker.is_file))
+            worker = json.loads(marker.read_text())
+            guardian = int(subprocess.check_output(["ps", "-p", str(worker["leader"]), "-o", "ppid="], text=True))
+            self.assertNotEqual(guardian, outer.pid)
+            self.assertNotEqual(worker["group"], guardian)
+            self.assertEqual(os.getpgid(outer.pid), outer.pid)
+            os.killpg(outer.pid, signal.SIGKILL)
+            _, error = outer.communicate(timeout=5)
+            self.assertEqual(outer.returncode, -signal.SIGKILL, error.decode())
+            self.assertTrue(until(lambda: not running(worker["pid"])))
+            self.assertFalse(running(worker["leader"]))
+            self.assertTrue(until(lambda: not running(guardian)))
+            self.assertIsNone(unrelated.poll())
+            self.assertFalse((self.root / "Killed.app").exists())
+            self.assertFalse(list((self.game / "nx2-work").glob("*.receipt.json")))
+        finally:
+            if worker is not None:
+                try:
+                    if os.getpgid(worker["pid"]) == worker["group"]:
+                        os.killpg(worker["group"], signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if outer.poll() is None:
+                os.killpg(outer.pid, signal.SIGKILL); outer.communicate(timeout=5)
+            unrelated.terminate(); unrelated.wait(timeout=5)
 
 
 if __name__ == "__main__":

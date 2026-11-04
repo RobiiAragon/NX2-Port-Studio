@@ -100,15 +100,20 @@ unrelated files beside the selected destination are preserved.
 On success, failure or handled termination I retire that workspace, leaving
 only a small redacted build log and, on success, its receipt. I never remove
 the dump, a pre-existing output app or another operation's workspace. The
-packer runs in its own process session. I stop its entire process group before
-removing the workspace, including workers that outlive the packer or ignore
-its termination signal. A supervisor watches the packer's exit independently
-of stdout, so a surviving compiler cannot hold the export's output pipe open.
-I preserve the existing one-second cancellation grace
-period and keep the group leader unreaped until the last group signal, so its
-PID cannot be reused for an unrelated group during cleanup. I defer SIGTERM
-and Ctrl-C until process ownership is registered and restore both handlers
-after cleanup; repeated cancellation does not interrupt retirement. The signed game bundle keeps its
+packer is owned by a separate guardian outside the desktop command's group.
+Only the exporter holds the guardian's noninherited lease writer. App Quit or
+SIGKILL of that command closes the lease, so the guardian immediately stops
+the job's whole group even when Python cannot run its cleanup. Cooperative
+cancellation retains the existing one-second grace interval. The guardian
+keeps the job leader unreaped until the last group signal, preventing reuse
+of that PID for an unrelated group. It watches leader exit independently of
+stdout, so a surviving compiler cannot hold completion open.
+
+I defer SIGTERM and Ctrl-C until ownership is registered and restore both
+handlers after cleanup; repeated cancellation does not interrupt retirement.
+The guardian reports retirement through a separate bounded channel. If that
+retirement cannot be verified, I preserve staging and the private workspace
+and return an error instead of a success receipt. The signed game bundle keeps its
 own resources; build cleanup must not leave
 external links. An abrupt power loss or SIGKILL can still leave that operation's
 temporary directory; I do not describe this as crash-proof garbage collection.

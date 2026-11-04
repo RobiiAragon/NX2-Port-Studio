@@ -21,6 +21,7 @@ class BuildProcess:
         self._retired = False
         self._ownership = threading.Lock()
         self._done = threading.Event()
+        self._wait_ready = threading.Event()
         self._error = None
         self._wake_reader, self._wake_writer = os.pipe()
         try:
@@ -59,10 +60,31 @@ class BuildProcess:
 
     def _close_wakeup(self) -> None:
         with self._ownership:
-            if self._wake_reader is not None:
-                os.close(self._wake_reader)
-                os.close(self._wake_writer)
-                self._wake_reader = self._wake_writer = None
+            reader, writer = self._wake_reader, self._wake_writer
+            self._wake_reader = self._wake_writer = None
+            try:
+                if reader is not None:
+                    os.close(reader)
+            finally:
+                if writer is not None:
+                    os.close(writer)
+
+    @property
+    def retired(self) -> bool:
+        with self._ownership:
+            return self._retired
+
+    def report_error(self, error: BaseException) -> None:
+        with self._ownership:
+            self._error = error
+            self._wait_ready.set()
+            if self._wake_writer is not None:
+                os.write(self._wake_writer, b"x")
+
+    @property
+    def failure(self):
+        with self._ownership:
+            return self._error
 
     def _signal(self, sig: int) -> None:
         try:
@@ -121,6 +143,7 @@ class BuildProcess:
             if self._watch is not None:
                 self._watch.close()
             self._done.set()
+            self._wait_ready.set()
             with self._ownership:
                 if self._wake_writer is not None:
                     try:
@@ -159,6 +182,9 @@ class BuildProcess:
             self._close_wakeup()
 
     def wait(self) -> int:
+        self._wait_ready.wait()
+        if self._error is not None and not self._done.is_set():
+            raise self._error
         self._supervisor.join()
         self._close_wakeup()
         if self._error is not None:
@@ -173,4 +199,9 @@ class BuildProcess:
         with self._ownership:
             if not self._retired:
                 self._retire_locked()
+        return self.wait()
+
+    def kill_immediately(self) -> int:
+        with self._ownership:
+            self._retire_locked()
         return self.wait()

@@ -20,7 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .build_process import BuildProcess
+from .build_guardian import GuardianBuildProcess as BuildProcess
 from .formats import DumpError
 from .pipeline import inspect_dump
 
@@ -249,10 +249,12 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
         # A repeated cancellation must not interrupt retirement of our workers.
         ignore_cancellation()
         try:
-            if build is not None:
-                build.cancel()
-            if process is not None and process.stdout is not None:
-                process.stdout.close()
+            try:
+                if build is not None:
+                    build.cancel()
+            finally:
+                if process is not None and process.stdout is not None:
+                    process.stdout.close()
             # Only this operation's staging and scratch are owned here. Retire
             # all build workers before removing paths they could still write.
             try:
