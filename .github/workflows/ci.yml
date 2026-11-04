@@ -135,6 +135,7 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk macosx --show-sdk-version
+          xcodebuild -downloadComponent MetalToolchain
           xcrun --sdk macosx metal --version
       - name: Apply attested host sources and exercise actual providers
         env:
