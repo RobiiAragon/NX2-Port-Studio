@@ -102,7 +102,9 @@ only a small redacted build log and, on success, its receipt. I never remove
 the dump, a pre-existing output app or another operation's workspace. The
 packer runs in its own process session. I stop its entire process group before
 removing the workspace, including workers that outlive the packer or ignore
-its termination signal. I preserve the existing one-second cancellation grace
+its termination signal. A supervisor watches the packer's exit independently
+of stdout, so a surviving compiler cannot hold the export's output pipe open.
+I preserve the existing one-second cancellation grace
 period and keep the group leader unreaped until the last group signal, so its
 PID cannot be reused for an unrelated group during cleanup. A repeated
 cancellation does not interrupt retirement. The signed game bundle keeps its

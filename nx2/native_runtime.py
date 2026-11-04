@@ -172,7 +172,18 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
     environment = {k: v for k, v in os.environ.items() if not k.startswith("DM_")}
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     title = report["metadata"]["program_id"]
-    previous_signal = signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))
+    starting_build = False
+    cancellation_requested = False
+    def cancel_export(*_):
+        nonlocal cancellation_requested
+        if starting_build:
+            # Capture the child's group and supervisor before a signal may
+            # unwind the call assigning that ownership to this export.
+            cancellation_requested = True
+        else:
+            signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            sys.exit(128 + signal.SIGTERM)
+    previous_signal = signal.signal(signal.SIGTERM, cancel_export)
     build = None
     process = None
     staging = None
@@ -186,11 +197,17 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                    "--platform", "mac-app", "--out", str(artifact), "--work-dir", str(scratch),
                    "--bundle-id", f"org.nxnative.{title.lower()}", "--language", language, "--progress", "json"]
         with log_path.open("x") as log:
-            build = BuildProcess(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
-                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
+            starting_build = True
+            try:
+                build = BuildProcess(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT, text=True, bufsize=1)
+            finally:
+                starting_build = False
             process = build.process
+            if cancellation_requested:
+                sys.exit(128 + signal.SIGTERM)
             assert process.stdout is not None
-            for line in process.stdout:
+            for line in build.output_lines():
                 clean = _redact(line)
                 log.write(clean)
                 print(clean, end="", flush=True)
