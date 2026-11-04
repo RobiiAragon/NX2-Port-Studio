@@ -28,10 +28,13 @@ network privacy text before signing when the bundled environment enables it.
 
 I leave all graphics and shader-chain files at the clean pin. This patch does
 not bring an online account, Nextendo route or TLS provider into the external
-engine. I enable the local providers only for the admitted Mario Kart World
-base profile; its exported environment selects `DM_NETWORK=auto`, so the game
-chooses LAN sockets or LDN through its own menus. Other admitted profiles keep
-their existing offline default.
+engine. I enable only LAN for the admitted Mario Kart World base profile;
+its exported environment selects `DM_NETWORK=lan`. The game's original SDK
+initialization selects Ounce LDN protocol 2, while this bridge implements
+NX-style IP membership. I have not implemented or qualified Ounce protocol 2,
+so I leave that profile's wireless path unavailable. The generic LDN fixtures
+still test the actual existing bridge. Other admitted profiles keep their
+existing offline default.
 
 I validate the adapter with authored repositories and a signed synthetic Mac
 app. I validate the patched engine separately with real loopback sockets,

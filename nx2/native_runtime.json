@@ -33,9 +33,11 @@
       },
       "upstream_note": "dm/games/0400C3F00006E000/README.md",
       "local_services": [
-        "lan",
-        "ldn"
-      ]
+        "lan"
+      ],
+      "unavailable_local_services": {
+        "ldn": "The original SDK selects Switch 2 local wireless protocol 2, which this provider does not implement."
+      }
     }
   },
   "overlay": {

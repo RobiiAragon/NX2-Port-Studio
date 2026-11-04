@@ -171,7 +171,7 @@ class EngineOverlayTests(unittest.TestCase):
         script = engine / "scripts/build_ipa_from_nsp.py"
         script.write_text(script.read_text().replace("subprocess.run(['/usr/bin/codesign'", """if '--env-file' in a:
  settings=pathlib.Path(a[a.index('--env-file')+1]); data=settings.read_text()
- assert data=='DM_NETWORK=auto\\n' and 'nx2-work' in str(settings)
+ assert data in {'DM_NETWORK=auto\\n','DM_NETWORK=lan\\n'} and 'nx2-work' in str(settings)
  assert not any(k.startswith('DM_') for k in __import__('os').environ)
  env=out/'Contents/Resources/dm/env.txt';env.parent.mkdir(parents=True);env.write_text(data)
  info=out/'Contents/Info.plist';plist=plistlib.loads(info.read_bytes())
@@ -180,13 +180,16 @@ subprocess.run(['/usr/bin/codesign'"""))
         git(engine, "add", ".")
         git(engine, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "Original network export fixture")
         spec.update(self.layer(engine))
-        spec["profiles"][case.title]["local_services"] = ["lan", "ldn"]
         apply_overlay(engine, spec)
-        with patch("nx2.native_runtime.specification", return_value=spec), patch.dict("os.environ", {"DM_NETWORK": "offline", "DM_GAME": "wrong"}):
-            receipt = export_mac(case.game, engine, case.root / "Network.app")
-        self.assertEqual(receipt["local_services"], ["lan", "ldn"])
-        self.assertEqual(receipt["engine_overlay"], spec["overlay"]["sha256"])
-        self.assertFalse(receipt["multiplayer_verified"])
+        for services, mode in [(["lan", "ldn"], "auto"), (["lan"], "lan")]:
+            spec["profiles"][case.title]["local_services"] = services
+            output = case.root / f"Network-{mode}.app"
+            with patch("nx2.native_runtime.specification", return_value=spec), patch.dict("os.environ", {"DM_NETWORK": "offline", "DM_GAME": "wrong"}):
+                receipt = export_mac(case.game, engine, output)
+            self.assertEqual(receipt["local_services"], services)
+            self.assertEqual((output / "Contents/Resources/dm/env.txt").read_text(), f"DM_NETWORK={mode}\n")
+            self.assertEqual(receipt["engine_overlay"], spec["overlay"]["sha256"])
+            self.assertFalse(receipt["multiplayer_verified"])
         self.assertFalse(any(p.is_dir() for p in (case.game / "nx2-work").iterdir()))
 
 

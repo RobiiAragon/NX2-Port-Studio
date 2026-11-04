@@ -145,6 +145,8 @@ def inspect_native_dump(dump: Path, spec: dict | None = None) -> dict:
     if profile.get("local_services"):
         report["native_export"]["local_services"] = profile["local_services"]
         report["native_export"]["multiplayer_verified"] = False
+    if profile.get("unavailable_local_services"):
+        report["native_export"]["unavailable_local_services"] = profile["unavailable_local_services"]
     return report
 
 
@@ -204,12 +206,14 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
                    "--platform", "mac-app", "--out", str(artifact), "--work-dir", str(scratch),
                    "--bundle-id", f"org.nxnative.{title.lower()}", "--language", language, "--progress", "json"]
         services = profile.get("local_services", [])
+        network_mode = None
         if services:
-            if services != ["lan", "ldn"] or verified.get("local_services") != services:
+            network_mode = {("lan",): "lan", ("ldn",): "ldn", ("lan", "ldn"): "auto"}.get(tuple(services))
+            if network_mode is None or any(service not in verified.get("local_services", []) for service in services):
                 raise DumpError("This engine has no reviewed provider for the selected local services",
                                 code="native-engine-network")
             settings = scratch / "local-network.env"
-            settings.write_text("DM_NETWORK=auto\n", encoding="utf-8")
+            settings.write_text(f"DM_NETWORK={network_mode}\n", encoding="utf-8")
             command += ["--env-file", str(settings)]
         with log_path.open("x") as log:
             process = subprocess.Popen(command, cwd=engine, env=environment, stdout=subprocess.PIPE,
@@ -239,7 +243,7 @@ def export_mac(dump: Path, engine: Path, output: Path, *, language: str = "es") 
             raise DumpError("The exported Mac app's signature did not verify", code="native-signature-invalid")
         bundled_settings = artifact / "Contents/Resources/dm/env.txt"
         if services and (not info.get("NSLocalNetworkUsageDescription") or not bundled_settings.is_file() or
-                         "DM_NETWORK=auto" not in bundled_settings.read_text(encoding="utf-8").splitlines()):
+                         f"DM_NETWORK={network_mode}" not in bundled_settings.read_text(encoding="utf-8").splitlines()):
             raise DumpError("The exported app is missing its local network setup", code="native-output-invalid")
         # The toolchain may create caches but must not alter a reviewed source.
         verify_engine(engine)

@@ -17,10 +17,12 @@ to the previous engine revision.
 
 I add a separately fingerprinted [LAN/LDN host layer](../../nx2/engine_overlays/README.md)
 over this exact pin. Its scope is host services and local-network packaging;
-I preserve the pinned shader chain. I enable these providers for Mario Kart
-World's admitted base profile, with game-menu selection and the Mac local
-network permission description already bundled. Source fixtures pass; a real
-game session remains unqualified. Bananza and Raiders keep their offline default.
+I preserve the pinned shader chain. I enable only the LAN provider for Mario
+Kart World's admitted base profile, with the Mac local network permission
+description already bundled. The original SDK selects Ounce LDN protocol 2,
+which this layer does not implement, so I keep its wireless path unavailable.
+Source fixtures pass; a real game session remains unqualified. Bananza and
+Raiders keep their offline default.
 
 ## Exact profiles
 
@@ -105,10 +107,12 @@ folders. Export clears ambient `DM_*` overrides before invoking the pinned
 script, so another game's shell profile cannot change this build. Progress is
 the engine's real newline-delimited JSON; a final `native-exported` receipt is
 emitted only after signature checks and cleanup succeed.
-For the local-network profile I create an owned `DM_NETWORK=auto` environment
+For the current local-network profile I create an owned `DM_NETWORK=lan` environment
 file and pass it to the existing packer. I verify its bundled copy and privacy
 text after signing, then remove the temporary input. The export receipt names
 the exact layer and keeps `multiplayer_verified` false.
+The adapter can select independent provider combinations for future qualified
+profiles; it does not enable every provider merely because its source is present.
 
 ## My private export check
 

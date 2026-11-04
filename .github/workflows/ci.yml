@@ -111,8 +111,12 @@ jobs:
         run: python3 tools/maintainers/ci_network_checks.py friends-history
   native-network:
     name: Pinned Switch 2 LAN and LDN / macOS
-    runs-on: macos-latest
+    # The pinned graphics sources require the macOS 27 SDK's MetalFX offsets.
+    # macos-latest currently selects Xcode 26.6; keep the complete host check.
+    runs-on: xcode-27
     timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v6
         with:
@@ -127,6 +131,11 @@ jobs:
           path: .nx2-build/native-network-engine
           persist-credentials: false
       - run: python -m pip install -r requirements-nx2.txt
+      - name: Verify native engine toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+          xcrun --sdk macosx metal --version
       - name: Apply attested host sources and exercise actual providers
         env:
           PYTHONDONTWRITEBYTECODE: '1'

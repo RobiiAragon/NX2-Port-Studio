@@ -64,7 +64,9 @@ NIFM and LDN providers in a separately fingerprinted
 [host source layer](../../nx2/engine_overlays/README.md). I apply it only to a
 fresh exact-engine checkout, without changing the graphics chain or replacing
 the installed app. I enable it for this admitted base profile with bundled
-`DM_NETWORK=auto`; the game chooses its local mode through its own menus.
+`DM_NETWORK=lan` for built-in LAN only. I keep the profile's LDN path disabled
+because the original initialization requests a protocol the bridge does not
+implement; matching public structures does not qualify that protocol.
 
 The original SDK 19 wrappers also confirm the public network configuration’s
 scene/channel/max-node/version offsets (`0x0a`, `0x10`, `0x12`, `0x14`) and the
@@ -81,6 +83,35 @@ creation, joining and a completed session. An IP LDN
 bridge also needs a compatible peer implementation; it does not directly
 speak a stock console’s radio protocol. A working built-in LAN test is a
 separate result and must not be described as LDN validation.
+
+### Ounce protocol qualification blocker
+
+I traced the admitted original modules with the shared NSO loader. `main`
+imports 25 LDN functions but does not import `SetProtocol`; `subsdk0` and `rtld`
+do not import it either. That absence does not mean the game uses NX protocol.
+Two original `main` call sites (`0x153d624`, `0x2247928`) invoke the SDK's LDN
+initializer. In the admitted SDK build, its initializer at `0x673410` passes
+**protocol 2** through the same service-interface slot used by `SetProtocol`.
+The exported wrapper maps public arguments `0 → 2`, `1 → 1`, `2 → 2`: Default
+selects Ounce, while NX is a different selection. I keep the original bytes
+and detailed disassembly private; no extracted code is included here.
+
+This agrees with the public [LDN protocol research](https://switchbrew.org/wiki/LDN_services#Protocol),
+which identifies Mario Kart World as protocol 2 and distinguishes Ounce key
+generation/authentication from NX. The layer's IP bridge carries the existing
+NX-style membership with up to eight nodes and platform 0. I have not
+implemented Ounce protocol 2, its platform/authentication behavior, or a
+verified mapping to an IP-only implementation. Bypassing the SDK initializer
+must not silently turn its Ounce request into successful NX initialization.
+I therefore enable **only LAN** for this profile and report LDN as unavailable;
+the generic LDN provider and its synthetic fixtures remain separate source work.
+
+I found no evidence here that a larger node structure is the immediate blocker.
+Nintendo documents [wireless play for 2–8 players and separate LAN play for
+2–24 players](https://en-americas-support.nintendo.com/app/answers/detail/a_id/68610).
+My bridge's eight-node limit is not a claim that either game mode works or
+that player count equals console count. I still need an actual matching-build
+LAN room and completed session; no two-game result is qualified.
 
 ## Online and remaining limits
 
@@ -119,3 +150,12 @@ I also passed **836,727** authored malformed-packet/parser checks. These are
 source/provider results, not a game room, race or Switch peer measurement.
 My signed synthetic app carries its local-network environment, privacy text
 and exact host-layer receipt while explicitly keeping multiplayer unverified.
+After the protocol audit, I also passed the signed fixture with LAN-only
+settings and confirmed that it does not bundle automatic LDN selection.
+
+The first hosted provider job passed its transport/sanitizer fixtures, then
+failed the full host compilation because `macos-latest` selected Xcode 26.6,
+whose MetalFX headers lack the pinned source's content-offset properties.
+I moved this complete-host job to GitHub's documented Xcode 27 image and
+explicit Xcode 27.2 toolchain. I keep the host link required; I have not changed
+the graphics source or removed the failing build step.
